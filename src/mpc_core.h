@@ -32,15 +32,69 @@
 #define __MPC_CORE_H_INCLUDED__
 
 
-#define MPC_VERSION_NUM     1           /* aabbbccc */
-#define MPC_VERSION_STR     "0.0.1"
-#define MPC_VERSION         "mpc/" MPC_VERSION_STR
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <unistd.h>
+#include <errno.h>
+#include <assert.h>
+#include <fcntl.h>
+#include <sys/time.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <mpc_queue.h>
+#include <mpc_string.h>
+#include <mpc_alloc.h>
+#include <mpc_util.h>
+#include <mpc_log.h>
+#include <mpc_event.h>
+#include <mpc_net.h>
+#include <mpc_url.h>
 
-#define MPC_OK      0
-#define MPC_ERROR   -1
 
-#define MPC_DO_NOTHING()    /* nothing */
-#define MPC_NOT_REACHED()   assert(0)
+#define MPC_VERSION_NUM         1           /* aabbbccc */
+#define MPC_VERSION_STR         "0.0.1"
+#define MPC_VERSION             "mpc/" MPC_VERSION_STR
+
+#define MPC_DEFAULT_CONF_PATH   "conf/mpc.conf"
+#define MPC_DEFAULT_PORT        17748
+
+#define MPC_OK                  0
+#define MPC_ERROR               -1
+
+#define MPC_NOTUSED(V)          ((void)V)
+#define MPC_DO_NOTHING()        /* nothing */
+#define MPC_NOT_REACHED()       assert(0)
+#define MPC_BUG                 abort()
+
+#define CRLF                    "\x0d\x0a"
+#define CRLF_LEN                (sizeof(CRLF) - 1)
+
+#define MPC_MAX(a, b)           ((a < b) ? (b) : (a))
+#define MPC_MIN(a, b)           ((a > b) ? (b) : (a))
+
+#define MPC_CONF_BUF_MAX_SIZE   1024
+
+#ifdef WITH_DEBUG
+#define ASSERT(x)               assert(x)  
+#define SET_MAGIC(s, m)         (s)->magic = m
+#else
+#define ASSERT(x)               /* nothing */
+#define SET_MAGIC(s, m)         /* nothing */
+#endif
+
+
+
+typedef struct {
+    char    *conf_filename;
+    char    *input_filename;
+    char    *addr;
+    int      port;
+} mpc_instance_t;
+
+
+int mpc_core_run(mpc_instance_t *ins);
+
 
 #endif /* __MPC_CORE_H_INCLUDED__ */
-

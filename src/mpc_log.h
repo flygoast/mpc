@@ -32,6 +32,10 @@
 #define __MPC_LOG_H_INCLUDED__
 
 
+#include <stdarg.h>
+#include <time.h>
+
+
 typedef struct {
     char    *name;      /* log file name */
     int      level;     /* log level */
@@ -45,22 +49,19 @@ typedef struct {
 #define MPC_LOG_CRIT        2       /* critical conditions */
 #define MPC_LOG_ERR         3       /* error condition */
 #define MPC_LOG_WARN        4       /* warning conditions */
-#define MPC_LOG_NOTICE      5       /* normal buf significant condition (default) */
+#define MPC_LOG_NOTICE      5       /* normal buf significant condition
+                                     * (default) */
 #define MPC_LOG_INFO        6       /* informational */
 #define MPC_LOG_DEBUG       7       /* debug messages */
 
-
 #define MPC_LOG_MAX_LEN     2048    /* max length of log message */
-
-
-#define mpc_log_stderr(...) do {        \
-    log_stderr_internal(__VA_ARGS__);   \
-} while (0)
-
 
 #define mpc_loga(...) do {                                  \
     mpc_log_internal(__FILE__, __LINE__, 0, __VA_ARGS__);   \
 } while (0)
+
+
+void mpc_log_stderr(const char *fmt, ...);
 
 
 #endif /* __MPC_LOG_H_INCLUDED__ */

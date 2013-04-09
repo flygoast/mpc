@@ -28,26 +28,24 @@
  */
 
 
-#ifndef __MPC_RESOLVER_H_INCLUDED__
-#define __MPC_RESOLVER_H_INCLUDED__
-
-#include <netdb.h>
-#include <ares.h>
+#ifndef __MPC_NET_H_INCLUDED__
+#define __MPC_NET_H_INCLUDED__
 
 
-#define MPC_RESOLVER_OK      ARES_SUCCESS
+#include <sys/un.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <arpa/inet.h>
 
 
-typedef void (*mpc_gethostbyname_cb)(mpc_event_loop_t *el, int status,
-    struct hostent *host, void *arg);
-
-/*
- * By 'server' parameter, you can specify DNS server instead of 
- * using /etc/resolv.conf. The string format is CSV. You can NOT
- * add whitespace between two servers.
- */
-void mpc_gethostbyname(mpc_event_loop_t *el, mpc_gethostbyname_cb callback, 
-    const char *name, int family, void *arg, const char *server);
+int mpc_net_accept(int sockfd, struct sockaddr *sa, socklen_t *len);
+int mpc_net_nonblock(int fd);
+int mpc_net_read(int fd, char *buf, int count);
+int mpc_net_write(int fd, char *buf, int count);
+int mpc_net_tcp_server(char *ip, int port);
+int mpc_net_unix_server(char *path, mode_t perm);
 
 
-#endif /* __MPC_RESOLVER_H_INCLUDED__ */
+#endif /* __MPC_NET_H_INCLUDED__ */

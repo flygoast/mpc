@@ -28,26 +28,40 @@
  */
 
 
-#ifndef __MPC_RESOLVER_H_INCLUDED__
-#define __MPC_RESOLVER_H_INCLUDED__
-
-#include <netdb.h>
-#include <ares.h>
+#ifndef __MPC_UTIL_H_INCLUDED__
+#define __MPC_UTIL_H_INCLUDED__
 
 
-#define MPC_RESOLVER_OK      ARES_SUCCESS
+#include <limits.h>
 
 
-typedef void (*mpc_gethostbyname_cb)(mpc_event_loop_t *el, int status,
-    struct hostent *host, void *arg);
+/* True if negative values of the signed integer type T uses two's
+ * complement, one's complement, or signed magnitude representation,
+ * respectively. */
+#define TYPE_TWOS_COMPLEMENT(t) ((t) ~(t)0 == (t)-1)
+#define TYPE_ONES_COMPLEMENT(t) ((t) ~(t)0 == 0)
+#define TYPE_SIGNED_MAGNITUDE(t) ((t) ~(t)0 < (t)-1)
 
-/*
- * By 'server' parameter, you can specify DNS server instead of 
- * using /etc/resolv.conf. The string format is CSV. You can NOT
- * add whitespace between two servers.
- */
-void mpc_gethostbyname(mpc_event_loop_t *el, mpc_gethostbyname_cb callback, 
-    const char *name, int family, void *arg, const char *server);
+#define TYPE_SIGNED(t)  (!((t)0 < (t)-1))
+#define TYPE_MAXIMUM(t)             \
+    ((t)(! TYPE_SIGNED(t)           \
+        ? (t)-1                     \
+        : ((((t)1 <<(sizeof(t) * CHAR_BIT - 2)) - 1) * 2 + 1)))
+#define TYPE_MINIMUM(t)             \
+    ((t)(! TYPE_SIGNED(t)           \
+        ? (t)0                      \
+        : TYPE_SIGNED_MAGNITUDE(t)  \
+        ? ~(t)0                     \
+        : ~ TYPE_MAXIMUM(t)))
+#define BILLION         (1000 * 1000 * 1000)
+
+#define mpc_atoi(l, n)      _mpc_atoi((uint8_t *)(l), (size_t)(n))
 
 
-#endif /* __MPC_RESOLVER_H_INCLUDED__ */
+int mpc_nanosleep(double seconds);
+void mpc_add_milliseconds_to_now(int64_t ms_delta, int64_t *sec, int64_t *ms);
+void mpc_get_time(int64_t *seconds, int64_t *milliseconds);
+int _mpc_atoi(uint8_t *line, size_t n);
+
+
+#endif /* __MPC_UTIL_H_INCLUDED__ */

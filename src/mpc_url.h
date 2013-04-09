@@ -28,26 +28,35 @@
  */
 
 
-#ifndef __MPC_RESOLVER_H_INCLUDED__
-#define __MPC_RESOLVER_H_INCLUDED__
-
-#include <netdb.h>
-#include <ares.h>
+#ifndef __MPC_URL_H_INCLUDED__
+#define __MPC_URL_H_INCLUDED__
 
 
-#define MPC_RESOLVER_OK      ARES_SUCCESS
+#define MPC_URL_MAGIC   0x4d55524c  /* "MURL" */
 
 
-typedef void (*mpc_gethostbyname_cb)(mpc_event_loop_t *el, int status,
-    struct hostent *host, void *arg);
+typedef struct mpc_url_s mpc_url_t;
+typedef struct mpc_url_hdr_s mpc_url_hdr_t;
 
-/*
- * By 'server' parameter, you can specify DNS server instead of 
- * using /etc/resolv.conf. The string format is CSV. You can NOT
- * add whitespace between two servers.
- */
-void mpc_gethostbyname(mpc_event_loop_t *el, mpc_gethostbyname_cb callback, 
-    const char *name, int family, void *arg, const char *server);
+struct mpc_url_s {
+#ifdef WITH_DEBUG
+    uint32_t                    magic;
+#endif
+    mpc_str_t                   host;
+    mpc_str_t                   uri;
+    STAILQ_ENTRY(mpc_url_s)     next;
+};
 
 
-#endif /* __MPC_RESOLVER_H_INCLUDED__ */
+STAILQ_HEAD(mpc_url_hdr_s, mpc_url_s);
+
+
+mpc_url_t *mpc_url_get(void);
+void mpc_url_put(mpc_url_t *mpc_url);
+void mpc_url_insert(mpc_url_hdr_t *mpc_url_hdr, mpc_url_t *mpc_url);
+void mpc_url_remove(mpc_url_hdr_t *mpc_url_hdr, mpc_url_t *mpc_url);
+void mpc_url_init(void);
+void mpc_url_deinit(void);
+
+
+#endif /* __MPC_URL_H_INCLUDED__ */

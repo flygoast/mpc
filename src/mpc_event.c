@@ -1,53 +1,74 @@
-/* A simple event-driven programming library. It's from Redis. */
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/time.h>
-#include <time.h>
-#include <poll.h>
-#include <unistd.h>
-#include "ae.h"
+/*
+ * mpc -- A Multiple Protocol Client.
+ * Copyright (c) 2013, FengGu <flygoast@gmail.com>
+ *
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ *
+ */
+
+
+#include <mpc_core.h>
+
 
 /* Include the best multiplexing layer supported by this system.
    The following should be ordered by performances, descending. */
-/*
-#if defined(EPOLL_MODE)
-#include "ae_epoll.c"
-#elif defined(POLL_MODE)
-#include "ae_poll.c"
-#elif defined(KQUEUE_MODE)
-#include "ae_kqueue.c"
-#else
-#include "ae_select.c"
-#endif
-*/
-
 #if defined(__linux__) 
-#include "ae_epoll.c"
+#include <mpc_epoll.c>
 #elif defined(__FreeBSD__)
-#include "ae_kqueue.c"
+#include <mpc_kqueue.c>
 #else
-#include "ae_select.c"
+#ifdef MPC_USE_POLL
+#include <mpc_poll.c>
+#else
+#include <mpc_select.c>
+#endif
 #endif
 
-ae_event_loop *ae_create_event_loop(int setsize) {
-    ae_event_loop *el;
-    int i;
 
-    el = (ae_event_loop*)malloc(sizeof(*el));
-    if (!el) {
+mpc_event_loop_t *
+mpc_create_event_loop(int setsize)
+{
+    int                i;
+    mpc_event_loop_t  *el;
+
+    el = (mpc_event_loop_t *)mpc_malloc(sizeof(mpc_event_loop_t));
+    if (el == NULL) {
         return NULL;
     }
 
-    el->events = (ae_file_event *)malloc(sizeof(ae_file_event) * setsize);
-    if (!el->events) {
-        free(el);
+    el->events = (mpc_file_event_t *)mpc_malloc(sizeof(mpc_file_event_t)
+                                                * setsize);
+    if (el->events == NULL) {
+        mpc_free(el);
         return NULL;
     }
 
-    el->fired = (ae_fired_event *)malloc(sizeof(ae_fired_event) * setsize);
-    if (!el->fired) {
-        free(el->events);
-        free(el);
+    el->fired = (mpc_fired_event_t *)mpc_malloc(sizeof(mpc_fired_event_t) 
+                                                * setsize);
+    if (el->fired == NULL) {
+        mpc_free(el->events);
+        mpc_free(el);
         return NULL;
     }
 
@@ -57,156 +78,172 @@ ae_event_loop *ae_create_event_loop(int setsize) {
     el->time_event_next_id = 0;
     el->stop = 0;
     el->maxfd = -1;
-    el->before_sleep = NULL;
-    if (ae_api_create(el) == -1) {
-        free(el);
+    el->before_sleep_ptr = NULL;
+    if (mpc_event_api_create(el) == -1) {
+        mpc_free(el);
         return NULL;
     }
 
-    /* Events with mask == AE_NONE are not set. So let's initialize
+    /* Events with mask == MPC_NONE are not set. So let's initialize
        the vector with it. */
     for (i = 0; i < setsize; ++i) {
-        el->events[i].mask = AE_NONE;
+        el->events[i].mask = MPC_NONE;
     }
 
     return el;
 }
 
-void ae_free_event_loop(ae_event_loop *el) {
-    ae_time_event *te, *next;
-    ae_api_free(el);
+
+void 
+mpc_free_event_loop(mpc_event_loop_t *el)
+{
+    mpc_time_event_t  *te, *next;
+
+    mpc_event_api_free(el);
 
     /* Delete all time event to avoid memory leak. */
     te = el->time_event_head;
     while (te) {
         next = te->next;
-        if (te->finalizer_proc) {
-            te->finalizer_proc(el, te->client_data);
+        if (te->finalizer_ptr) {
+            te->finalizer_ptr(el, te->data);
         }
-        free(te);
+        mpc_free(te);
         te = next;
     }
 
-    free(el->events);
-    free(el->fired);
-    free(el);
+    mpc_free(el->events);
+    mpc_free(el->fired);
+    mpc_free(el);
 }
 
-void ae_stop(ae_event_loop *el) {
+
+void 
+mpc_event_stop(mpc_event_loop_t *el)
+{
     el->stop = 1;
 }
 
+
 /* Register a file event. */
-int ae_create_file_event(ae_event_loop *el, int fd, int mask,
-        ae_file_proc *proc, void *client_data) {
+int
+mpc_create_file_event(mpc_event_loop_t *el, int fd, int mask,
+    mpc_event_file_pt file_ptr, void *data)
+{
+    mpc_file_event_t  *fe;
+
     if (fd >= el->setsize) {
         errno = ERANGE;
-        return AE_ERR;
+        return MPC_ERROR;
     } 
-    ae_file_event *fe = &el->events[fd];
 
-    if (ae_api_add_event(el, fd, mask) == -1) {
-        return AE_ERR;
+    fe = &el->events[fd];
+
+    if (mpc_event_api_add_event(el, fd, mask) == -1) {
+        return MPC_ERROR;
     }
+
     fe->mask |= mask; /* On one fd, multi events can be registered. */
-    if (mask & AE_READABLE) {
-        fe->r_file_proc = proc;
+    if (mask & MPC_READABLE) {
+        fe->r_file_ptr = file_ptr;
     }
 
-    if (mask & AE_WRITABLE) {
-        fe->w_file_proc = proc;
+    if (mask & MPC_WRITABLE) {
+        fe->w_file_ptr = file_ptr;
     } 
-    fe->client_data = client_data;
+    fe->data = data;
+
     /* Once one file event has been registered, the el->maxfd
        no longer is -1. */
     if (fd > el->maxfd) {
         el->maxfd = fd;
     }
-    return AE_OK;
+
+    return MPC_OK;
 }
 
+
 /* Unregister a file event */
-void ae_delete_file_event(ae_event_loop *el, int fd, int mask) {
+void
+mpc_delete_file_event(mpc_event_loop_t *el, int fd, int mask)
+{
+    mpc_file_event_t *fe;
+
     if (fd >= el->setsize) {
         return;
     }
 
-    ae_file_event *fe = &el->events[fd];
-    if (fe->mask == AE_NONE) {
+    fe = &el->events[fd];
+    if (fe->mask == MPC_NONE) {
         return;
     }
+
     fe->mask = fe->mask & (~mask);
-    if (fd == el->maxfd && fe->mask == AE_NONE) {
+
+    if (fd == el->maxfd && fe->mask == MPC_NONE) {
         /* All the events on the fd were deleted, update the max fd. */
         int j;
         for (j = el->maxfd - 1; j >= 0; --j) {
-            if (el->events[j].mask != AE_NONE) {
+            if (el->events[j].mask != MPC_NONE) {
                 break;
             }
         }
+
         /* If all the file events on all fds deleted, max fd will get
            back to -1. */
         el->maxfd = j;
     }
-    ae_api_del_event(el, fd, mask);
+
+    mpc_event_api_del_event(el, fd, mask);
 }
 
-int ae_get_file_events(ae_event_loop *el, int fd) {
+
+int
+mpc_get_file_events(mpc_event_loop_t *el, int fd)
+{
+    mpc_file_event_t *fe;
     if (fd >= el->setsize) {
         return 0;
     }
 
-    ae_file_event *fe = &el->events[fd];
+    fe = &el->events[fd];
     return fe->mask;
-}
-
-static void ae_get_time(long *seconds, long *milliseconds) {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    *seconds = tv.tv_sec;
-    *milliseconds = tv.tv_usec / 1000;
-}
-
-static void ae_add_milliseconds_to_now(long long milliseconds, 
-        long *sec, long *ms) {
-    long cur_sec, cur_ms, when_sec, when_ms;
-    ae_get_time(&cur_sec, &cur_ms);
-    when_sec = cur_sec + milliseconds / 1000;
-    when_ms = cur_ms + milliseconds % 1000;
-    /* cur_ms < 1000, when_ms < 2000, so just one time is enough. */
-    if (when_ms >= 1000) {
-        ++when_sec;
-        when_ms -= 1000;
-    }
-    *sec = when_sec;
-    *ms = when_ms;
 }
 
 
 /* Register a time event. */
-long long ae_create_time_event(ae_event_loop *el, long long ms, 
-        ae_time_proc *proc, void *client_data,
-        ae_event_finalizer_proc *finalizer_proc) {
-    long long id = el->time_event_next_id++;
-    ae_time_event *te;
-    te = (ae_time_event*)malloc(sizeof(*te));
+int64_t
+mpc_create_time_event(mpc_event_loop_t *el, int64_t ms, 
+    mpc_event_time_pt time_ptr, void *data,
+    mpc_event_finalizer_pt finalizer_ptr)
+{
+    mpc_time_event_t  *te;
+    int64_t            id = el->time_event_next_id++;
+
+    te = (mpc_time_event_t *)mpc_malloc(sizeof(mpc_time_event_t));
     if (te == NULL) {
-        return AE_ERR;
+        return MPC_ERROR;
     }
+
     te->id = id;
-    ae_add_milliseconds_to_now(ms, &te->when_sec, &te->when_ms);
-    te->time_proc = proc;
-    te->finalizer_proc = finalizer_proc;
-    te->client_data = client_data;
+    mpc_add_milliseconds_to_now(ms, &te->when_sec, &te->when_ms);
+    te->time_ptr = time_ptr;
+    te->finalizer_ptr = finalizer_ptr;
+    te->data = data;
+
     /* Insert time event into the head of the linked list. */
     te->next = el->time_event_head;
     el->time_event_head = te;
+
     return id;
 }
 
+
 /* Unregister a time event. */
-int ae_delete_time_event(ae_event_loop *el, long long id) {
-    ae_time_event *te, *prev = NULL;
+int
+mpc_delete_time_event(mpc_event_loop_t *el, int64_t id)
+{
+    mpc_time_event_t *te, *prev = NULL;
 
     te = el->time_event_head;
     while (te) {
@@ -217,53 +254,64 @@ int ae_delete_time_event(ae_event_loop *el, long long id) {
             } else {
                 prev->next = te->next;
             }
-            if (te->finalizer_proc) {
-                te->finalizer_proc(el, te->client_data);
+
+            if (te->finalizer_ptr) {
+                te->finalizer_ptr(el, te->data);
             }
-            free(te);
-            return AE_OK;
+
+            mpc_free(te);
+            return MPC_OK;
         }
         prev = te;
         te = te->next;
     }
-    return AE_ERR; /* NO event with the specified ID found */
+    return MPC_ERROR; /* NO event with the specified ID found */
 }
 
-/* Search the first timer to fire.
-   This operation is useful to know how many time the select can be
-   put in sleep without to delay any event.
-   If there are no timers NULL is returned.
 
-   Note that's O(N) since time events are unsorted.
-   Possible optimizations (not needed by Redis so far, but ...):
-   1) Insert the event in order, so that the nearest is just the head.
-      Much better but still insertion or deletion of timer is O(N).
-   2) Use a skiplist to have this operation as O(1) and insertion as
-      O(log(N)).
-
-    At now, I don't know what's a skiplist...... 0_0!
-*/
-static ae_time_event *ae_search_nearest_timer(ae_event_loop *el) {
-    ae_time_event *te = el->time_event_head;
-    ae_time_event *nearest = NULL;
+/*
+ * Search the first timer to fire.
+ * This operation is useful to know how many time the select can be
+ * put in sleep without to delay any event.
+ * If there are no timers NULL is returned.
+ *
+ * Note that's O(N) since time events are unsorted.
+ * Possible optimizations (not needed by Redis so far, but ...):
+ * 1) Insert the event in order, so that the nearest is just the head.
+ *    Much better but still insertion or deletion of timer is O(N).
+ * 2) Use a skiplist to have this operation as O(1) and insertion as
+ *    O(log(N)).
+ *
+ */
+static mpc_time_event_t *
+mpc_search_nearest_timer(mpc_event_loop_t *el)
+{
+    mpc_time_event_t  *te = el->time_event_head;
+    mpc_time_event_t  *nearest = NULL;
 
     while (te) {
-        if (!nearest || te->when_sec < nearest->when_sec ||
-                (te->when_sec == nearest->when_sec &&
-                 te->when_ms < nearest->when_ms)) {
+        if (nearest == NULL
+            || te->when_sec < nearest->when_sec 
+            || (te->when_sec == nearest->when_sec
+                && te->when_ms < nearest->when_ms))
+        {
             nearest = te;
         }
         te = te->next;
     }
+
     return nearest;
 }
 
+
 /* Process time events. */
-static int process_time_events(ae_event_loop *el) {
-    int processed = 0;
-    ae_time_event *te;
-    long long maxid;
-    time_t now = time(NULL);
+static int
+process_time_events(mpc_event_loop_t *el)
+{
+    int                processed = 0;
+    mpc_time_event_t  *te;
+    int64_t            maxid;
+    time_t             now = time(NULL);
 
     /* If the system clock is moved to the future, and then set back to the
      * right value, time events may be delayed in a random way. Often this
@@ -285,20 +333,22 @@ static int process_time_events(ae_event_loop *el) {
     te = el->time_event_head;
     maxid = el->time_event_next_id - 1;
     while (te) {
-        long now_sec, now_ms;
-        long long id;
+        int64_t  id, now_sec, now_ms;
+
         /* Don't process the time event registered during this process. */
         if (te->id > maxid) { 
             te = te->next;
             continue;
         }
-        ae_get_time(&now_sec, &now_ms);
+        mpc_get_time(&now_sec, &now_ms);
+
         /* timeout */
-        if (now_sec > te->when_sec ||
-            (now_sec == te->when_sec && now_ms >= te->when_ms)) {
+        if (now_sec > te->when_sec
+            || (now_sec == te->when_sec && now_ms >= te->when_ms))
+        {
             int ret;
             id = te->id;
-            ret = te->time_proc(el, id, te->client_data);
+            ret = te->time_ptr(el, id, te->data);
             processed++;
             /* After an event is processed our time event list 
                may no longer be the same, so we restart from head.
@@ -315,18 +365,21 @@ static int process_time_events(ae_event_loop *el) {
                way for later deletion(putting references to the 
                nodes to delete into another linked list). */
             if (ret > 0) {
-                ae_add_milliseconds_to_now(ret, &te->when_sec, 
+                mpc_add_milliseconds_to_now(ret, &te->when_sec, 
                         &te->when_ms);
             } else {
-                ae_delete_time_event(el, id);
+                mpc_delete_time_event(el, id);
             }
             te = el->time_event_head;
+
         } else {
             te = te->next;
         }
     }
+
     return processed;
 }
+
 
 /* Process every pending time event, then every pending file event
    (that may be registered by time event callbacks just processed).
@@ -334,215 +387,138 @@ static int process_time_events(ae_event_loop *el) {
    fires, or when the next time event occurs (if any).
 
    If flag is 0, the function does nothing and returns.
-   if flag has AE_ALL_EVENTS set, all the kind of events are processed.
-   if flag has AE_FILE_EVENTS set, file events are processed.
-   if flag has AE_TIME_EVENTS set, time events are processed.
-   if flag has AE_DONT_WAIT set, the function returns ASAP (As soon
+   if flag has mpc_ALL_EVENTS set, all the kind of events are processed.
+   if flag has mpc_FILE_EVENTS set, file events are processed.
+   if flag has mpc_TIME_EVENTS set, time events are processed.
+   if flag has mpc_DONT_WAIT set, the function returns ASAP (As soon
    as possible) until all the events that's possible to process 
    without to wait are processed.
 
    The function returns the number of events processed. */
-int ae_process_events(ae_event_loop *el, int flags) {
+int
+mpc_process_events(mpc_event_loop_t *el, int flags)
+{
     int processed = 0, numevents;
 
     /* Nothing to do ? return ASAP */
-    if (!(flags & AE_TIME_EVENTS) && !(flags & AE_FILE_EVENTS)) {
+    if (!(flags & MPC_TIME_EVENTS) && !(flags & MPC_FILE_EVENTS)) {
         return 0;
     }
 
     /* Note that we want call select() even if there are no file
        events to process as long as we want to process time events,
        in order to sleep until the next time event is ready to fire. */
-    if (el->maxfd != -1 ||
-        ((flags & AE_TIME_EVENTS) && !(flags & AE_DONT_WAIT))) {
-        int j;
-        ae_time_event *shortest = NULL;
-        struct timeval tv, *tvp;
+    if (el->maxfd != -1
+        || ((flags & MPC_TIME_EVENTS) && !(flags & MPC_DONT_WAIT)))
+    {
+        int             j;
+        mpc_time_event_t *shortest = NULL;
+        struct timeval    tv, *tvp;
         
-        if (flags & AE_TIME_EVENTS && !(flags & AE_DONT_WAIT)) {
-            shortest = ae_search_nearest_timer(el);
+        if (flags & MPC_TIME_EVENTS && !(flags & MPC_DONT_WAIT)) {
+            shortest = mpc_search_nearest_timer(el);
         } 
+
         if (shortest) {
-            long now_sec, now_ms;
+            int64_t now_sec, now_ms;
 
             /* Calculate the time missing for the nearest timer 
                to fire. */
-            ae_get_time(&now_sec, &now_ms);
+            mpc_get_time(&now_sec, &now_ms);
             tvp = &tv;
             tvp->tv_sec = shortest->when_sec - now_sec;
             if (shortest->when_ms < now_ms) {
-                tvp->tv_usec = ((shortest->when_ms + 1000) 
-                        - now_ms) * 1000;
-                --tvp->tv_sec;
+                tvp->tv_usec = ((shortest->when_ms + 1000) - now_ms) * 1000;
+                tvp->tv_sec--;
+
             } else {
                 tvp->tv_usec = (shortest->when_ms - now_ms) * 1000;
             }
+
             if (tvp->tv_sec < 0) {
                 tvp->tv_sec = 0;
             } 
+
             if (tvp->tv_usec < 0) {
                 tvp->tv_usec = 0;
             }
+
         } else {
             /* If we have to check for events but need to return
-               ASAP because of AE_DONT_WAIT we need to set the 
+               ASAP because of MPC_DONT_WAIT we need to set the 
                timeout to zero. */
-            if (flags & AE_DONT_WAIT) {
+            if (flags & MPC_DONT_WAIT) {
                 tv.tv_sec = tv.tv_usec = 0;
                 tvp = &tv;
+
             } else {
                 /* Otherwise we can block. */
                 tvp = NULL; /* wait forever */
             }
         }
-        numevents = ae_api_poll(el, tvp);
+
+        numevents = mpc_event_api_poll(el, tvp);
+
         for (j = 0; j < numevents; ++j) {
-            ae_file_event *fe = &el->events[el->fired[j].fd];
-            int mask = el->fired[j].mask;
-            int fd = el->fired[j].fd;
-            int rfired = 0;
+            mpc_file_event_t *fe = &el->events[el->fired[j].fd];
+            int               mask = el->fired[j].mask;
+            int               fd = el->fired[j].fd;
+            int               rfired = 0;
             
             /* Note the fe->mask & mask & ... code: maybe an already
                processed event removed an element that fired and we
                still didn't processed, so we check if the events is 
                still valid. */
-            if (fe->mask & mask & AE_READABLE) {
+            if (fe->mask & mask & MPC_READABLE) {
                 rfired = 1;
-                fe->r_file_proc(el, fd, fe->client_data, mask);
+                fe->r_file_ptr(el, fd, fe->data, mask);
             } 
-            if (fe->mask & mask & AE_WRITABLE) {
-                if (!rfired || fe->w_file_proc != fe->r_file_proc) {
-                    fe->w_file_proc(el, fd, fe->client_data, mask);
+
+            if (fe->mask & mask & MPC_WRITABLE) {
+                if (!rfired || fe->w_file_ptr != fe->r_file_ptr) {
+                    fe->w_file_ptr(el, fd, fe->data, mask);
                 }
             }
 
             ++processed;
         }
     }
+
     /* Check time events */
-    if (flags & AE_TIME_EVENTS) {
+    if (flags & MPC_TIME_EVENTS) {
         processed += process_time_events(el);
     }
+
     /* Return the number of processed file/time events */
     return processed; 
 }
 
-/* Wait for milliseconds until the given file descriptior becomes
-   writable/readable/exception */
-int ae_wait(int fd, int mask, long long milliseconds) {
-    struct pollfd pfd;
-    int retmask = 0, retval;
-
-    memset(&pfd, 0, sizeof(pfd));
-    pfd.fd = fd;
-    if (mask & AE_READABLE) pfd.events |= POLLIN;
-    if (mask & AE_WRITABLE) pfd.events |= POLLOUT;
-
-    if ((retval = poll(&pfd, 1, milliseconds)) == 1) {
-        if (pfd.revents & POLLIN) {
-            retmask |= AE_READABLE;
-        }
-
-        if (pfd.revents & POLLOUT) {
-            retmask |= AE_WRITABLE;
-        }
-
-    	if (pfd.revents & POLLERR) {
-            retmask |= AE_WRITABLE;
-        }
-
-        if (pfd.revents & POLLHUP) {
-            retmask |= AE_WRITABLE;
-        }
-        return retmask;
-    } else {
-        return retval;
-    }
-}
 
 /* main loop of the event-driven framework */
-void ae_main(ae_event_loop *el) {
+void
+mpc_event_main(mpc_event_loop_t *el)
+{
     el->stop = 0;
+
     while (!el->stop) {
-        if (el->before_sleep != NULL) {
-            el->before_sleep(el);
+        if (el->before_sleep_ptr != NULL) {
+            el->before_sleep_ptr(el);
         }
-        ae_process_events(el, AE_ALL_EVENTS);
+        mpc_process_events(el, MPC_ALL_EVENTS);
     }
 }
 
-char *ae_get_api_name(void) {
-    return ae_api_name();
+
+char *
+mpc_event_get_api_name(void)
+{
+    return mpc_event_api_name();
 }
 
-void ae_set_before_sleep_proc(ae_event_loop *el, 
-        ae_before_sleep_proc *before_sleep) {
-    el->before_sleep = before_sleep;
+
+void
+mpc_set_before_sleep_ptr(mpc_event_loop_t *el, 
+    mpc_event_before_sleep_pt before_sleep_ptr)
+{
+    el->before_sleep_ptr = before_sleep_ptr;
 }
-
-#ifdef AE_TEST_MAIN
-int print_timeout(ae_event_loop *el, long long id, void *client_data) {
-    printf("Hello, AE!\n");
-    return 5000; /* return AE_NOMORE */
-}
-
-struct items {
-    char        *item_name;
-    int         freq_sec;
-    long long   event_id;
-} acq_items [] = {
-    {"acq1", 10 * 1000, 0},
-    {"acq2", 30 * 1000, 0},
-    {"acq3", 60 * 1000, 0},
-    {"acq4", 10 * 1000, 0},
-    {NULL, 0, 0}
-};
-
-int output_result(ae_event_loop *el, long long id, void *client_data) {
-    int i = 0;
-    for ( ; ; ++i) {
-        if (!acq_items[i].item_name) {
-            break;
-        }
-        if (id == acq_items[i].event_id) {
-            printf("%s:%d\n", acq_items[i].item_name, time(NULL));
-            fflush(stdout);
-            return acq_items[i].freq_sec;
-        }
-    }
-    return 0;
-}
-
-void add_all(ae_event_loop *el) {
-    int i = 0;
-    for ( ; ; ++i) {
-        if (!acq_items[i].item_name) {
-            break;
-        }
-        acq_items[i].event_id = ae_create_time_event(el, 
-            acq_items[i].freq_sec,
-            output_result, NULL, NULL);
-    }
-}
-
-void delete_all(ae_event_loop *el) {
-    int i = 0;
-    for ( ; ; ++i) {
-        if (!acq_items[i].item_name) {
-            break;
-        }
-
-        ae_delete_time_event(el, acq_items[i].event_id);
-    }
-}
-
-int main(int argc, char *argv[]) {
-    long long id;
-    ae_event_loop *el = ae_create_event_loop(500);
-    add_all(el);
-    ae_main(el);
-    delete_all(el);
-    ae_free_event_loop(el);
-    exit(0);
-}
-#endif /* AE_TEST_MAIN */

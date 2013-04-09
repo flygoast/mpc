@@ -34,7 +34,7 @@
 typedef struct  {
     size_t     len;
     uint8_t   *data;
-} mpc_string_t;
+} mpc_str_t;
 
 
 #define mpc_string(str)     { sizeof(str) - 1, (uint8_t *) str }

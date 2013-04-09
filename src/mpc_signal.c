@@ -88,7 +88,7 @@ mpc_signal_handler(int signo)
         }
     }
 
-#ifdef DEBUG
+#ifdef WITH_DEBUG
     assert(sig->signo != 0);
 #endif
 
