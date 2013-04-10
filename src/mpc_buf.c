@@ -43,14 +43,11 @@ mpc_buf_get_internal(void)
     mpc_buf_t   *mpc_buf;
     uint8_t     *buf;
 
-
     if (!STAILQ_EMPTY(&mpc_buf_free_queue)) {
         mpc_buf = STAILQ_FIRST(&mpc_buf_free_queue);
         mpc_buf_nfree--;
         STAILQ_REMOVE_HEAD(&mpc_buf_free_queue, next);
-#ifdef DEBUG
-        assert(mpc_buf->magic == MPC_BUF_MAGIC);
-#endif
+        ASSERT(mpc_buf->magic == MPC_BUF_MAGIC);
         goto done;
     }
 
@@ -80,9 +77,7 @@ mpc_buf_get_internal(void)
      */
 
     mpc_buf = (mpc_buf_t *)(buf + mpc_buf_offset);
-#ifdef DEBUG
-    mpc_buf->magic = MPC_BUF_MAGIC;
-#endif 
+    SET_MAGIC(mpc_buf, MPC_BUF_MAGIC);
 
 done:
     STAILQ_NEXT(mpc_buf, next) = NULL;
@@ -105,10 +100,8 @@ mpc_buf_get(void)
     mpc_buf->start = buf;
     mpc_buf->end = (uint8_t *)mpc_buf;
 
-#ifdef DEBUG
-    assert(mpc_buf->end - mpc_buf->start == mpc_buf_offset);
-    assert(mpc_buf->start < mpc_buf->end);
-#endif /* DEBUG */
+    ASSERT(mpc_buf->end - mpc_buf->start == mpc_buf_offset);
+    ASSERT(mpc_buf->start < mpc_buf->end);
 
     mpc_buf->pos = mpc_buf->start;
     mpc_buf->last = mpc_buf->start;
@@ -122,10 +115,8 @@ mpc_buf_free(mpc_buf_t *mpc_buf)
 {
     uint8_t *buf;
 
-#ifdef DEBUG
-    assert(STAILQ_NEXT(mpc_buf, next) == NULL);
-    assert(mpc_buf->magic == MPC_BUF_MAGIC);
-#endif
+    ASSERT(STAILQ_NEXT(mpc_buf, next) == NULL);
+    ASSERT(mpc_buf->magic == MPC_BUF_MAGIC);
 
     buf = (uint8_t *)mpc_buf - mpc_buf_offset;
     mpc_free(buf);
@@ -135,10 +126,8 @@ mpc_buf_free(mpc_buf_t *mpc_buf)
 void
 mpc_buf_put(mpc_buf_t *mpc_buf)
 {
-#ifdef DEBUG
-    assert(STAILQ_NEXT(mpc_buf, next) == NULL);
-    assert(mpc_buf->magic == MPC_BUF_MAGIC);
-#endif
+    ASSERT(STAILQ_NEXT(mpc_buf, next) == NULL);
+    ASSERT(mpc_buf->magic == MPC_BUF_MAGIC);
 
     mpc_buf_nfree++;
     STAILQ_INSERT_HEAD(&mpc_buf_free_queue, mpc_buf, next);
@@ -203,15 +192,11 @@ mpc_buf_split(mpc_buf_hdr_t *h, uint8_t *pos, mpc_buf_copy_pt cb, void *cbarg)
     mpc_buf_t   *mpc_buf, *nbuf;
     size_t       size;
 
-#ifdef DEBUG
-    assert(!STAILQ_EMPTY(h));
-#endif
+    ASSERT(!STAILQ_EMPTY(h));
 
     mpc_buf = STAILQ_LAST(h, mpc_buf_s, next);
 
-#ifdef DEBUG
-    assert(pos >= mpc_buf->pos && pos <= mpc_buf->last);
-#endif
+    ASSERT(pos >= mpc_buf->pos && pos <= mpc_buf->last);
 
     nbuf = mpc_buf_get();
     if (nbuf == NULL) {
@@ -237,7 +222,6 @@ mpc_buf_split(mpc_buf_hdr_t *h, uint8_t *pos, mpc_buf_copy_pt cb, void *cbarg)
 void
 mpc_buf_init(void)
 {
-    /* TODO: according conf */
     mpc_buf_nfree = 0;
     STAILQ_INIT(&mpc_buf_free_queue);
 
@@ -255,7 +239,6 @@ mpc_buf_deinit(void)
         mpc_buf_free(mpc_buf);
         mpc_buf_nfree--;
     }
-#ifdef DEBUG
-    assert(mpc_buf_nfree == 0);
-#endif
+
+    ASSERT(mpc_buf_nfree == 0);
 }

@@ -43,6 +43,8 @@
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sched.h>
+#include <pthread.h>
 #include <mpc_queue.h>
 #include <mpc_string.h>
 #include <mpc_alloc.h>
@@ -51,6 +53,9 @@
 #include <mpc_event.h>
 #include <mpc_net.h>
 #include <mpc_url.h>
+#include <mpc_buf.h>
+#include <mpc_connection.h>
+#include <mpc_http.h>
 
 
 #define MPC_VERSION_NUM         1           /* aabbbccc */
@@ -66,8 +71,10 @@
 #define MPC_NOTUSED(V)          ((void)V)
 #define MPC_DO_NOTHING()        /* nothing */
 #define MPC_NOT_REACHED()       assert(0)
-#define MPC_BUG                 abort()
+#define MPC_BUG()               assert(0)
 
+#define LF                      (uint8_t)10
+#define CR                      (uint8_t)13
 #define CRLF                    "\x0d\x0a"
 #define CRLF_LEN                (sizeof(CRLF) - 1)
 

@@ -38,13 +38,18 @@
 typedef struct mpc_url_s mpc_url_t;
 typedef struct mpc_url_hdr_s mpc_url_hdr_t;
 
+
 struct mpc_url_s {
 #ifdef WITH_DEBUG
     uint32_t                    magic;
 #endif
+    STAILQ_ENTRY(mpc_url_s)     next;
     mpc_str_t                   host;
     mpc_str_t                   uri;
-    STAILQ_ENTRY(mpc_url_s)     next;
+    int                         port;
+    uint8_t                    *buf;
+    uint32_t                    buf_size;
+    unsigned                    no_resolve:1;
 };
 
 
@@ -53,10 +58,12 @@ STAILQ_HEAD(mpc_url_hdr_s, mpc_url_s);
 
 mpc_url_t *mpc_url_get(void);
 void mpc_url_put(mpc_url_t *mpc_url);
-void mpc_url_insert(mpc_url_hdr_t *mpc_url_hdr, mpc_url_t *mpc_url);
-void mpc_url_remove(mpc_url_hdr_t *mpc_url_hdr, mpc_url_t *mpc_url);
 void mpc_url_init(void);
 void mpc_url_deinit(void);
+mpc_url_t *mpc_url_task_get(void);
+void mpc_url_task_insert(mpc_url_t *mpc_url);
+uint32_t mpc_url_task_count(void);
+uint32_t mpc_url_free_count(void);
 
 
 #endif /* __MPC_URL_H_INCLUDED__ */

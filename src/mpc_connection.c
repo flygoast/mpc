@@ -35,8 +35,8 @@ static uint32_t         mpc_conn_nfree;
 static mpc_conn_hdr_t   mpc_conn_free_queue;
 
 
-static mpc_conn_t *
-mpc_conn_get_internal(void)
+mpc_conn_t *
+mpc_conn_get(void)
 {
     mpc_conn_t  *conn;
 
@@ -45,37 +45,30 @@ mpc_conn_get_internal(void)
 
         conn = TAILQ_FIRST(&mpc_conn_free_queue);
         mpc_conn_nfree--;
-        TAILQ_REMOVE(&mpc_conn_free_queue, mpc_conn_s, next);
+        TAILQ_REMOVE(&mpc_conn_free_queue, conn, next);
+        ASSERT(conn->magic == MPC_CONN_MAGIC);
+
     } else {
         conn = mpc_alloc(sizeof(*conn));
         if (conn == NULL) {
             return NULL;
         }
+
+        SET_MAGIC(conn, MPC_CONN_MAGIC);
     }
 
     conn->fd = -1;
+
+    STAILQ_INIT(&conn->rcv_buf_queue);
+    STAILQ_INIT(&conn->snd_buf_queue);
+
     conn->rcv_buf = NULL;
     conn->snd_buf = NULL;
-
     conn->rcv_bytes = 0;
     conn->snd_bytes = 0;
     
     conn->connecting = 0;
     conn->connected = 0;
-
-    return conn;
-}
-
-
-mpc_conn_t *
-mpc_conn_get(void)
-{
-    mpc_conn_t  *conn;
-
-    conn = mpc_conn_get_internal();
-    if (conn == NULL) {
-        return NULL;
-    }
 
     return conn;
 }
@@ -91,9 +84,10 @@ mpc_conn_free(mpc_conn_t *conn)
 void
 mpc_conn_put(mpc_conn_t *conn)
 {
+    ASSERT(conn->magic == MPC_CONN_MAGIC);
     ASSERT(conn->fd < 0);
     mpc_conn_nfree++;
-    TAILQ_INSERT_HEAD(&mpc_conn_free_queue, mpc_conn_s, next);
+    TAILQ_INSERT_HEAD(&mpc_conn_free_queue, conn, next);
 }
 
 
@@ -110,7 +104,8 @@ mpc_conn_deinit(void)
 {
     mpc_conn_t *conn, *nconn;   /* current and next connection */
 
-    for (conn = TAILQ_FIRST(&mpc_conn_free_queue); conn != NULL;
+    for (conn = TAILQ_FIRST(&mpc_conn_free_queue);
+         conn != NULL;
          conn = nconn, mpc_conn_nfree--)
     {
         ASSERT(mpc_conn_nfree > 0);
@@ -120,50 +115,3 @@ mpc_conn_deinit(void)
 
     ASSERT(mpc_conn_nfree == 0);
 }
-
-
-ssize_t
-mpc_conn_recv(mpc_conn_t *conn, void *buf, size_t size)
-{
-    ssize_t n;
-
-    ASSERT(buf != NULL);
-    ASSERT(size > 0);
-    
-    for ( ;; ) {
-        n = read(conn->fd, buf, size);
-
-        if (n > 0) {
-            conn->rcv_bytes += (size_t)n;
-            return n;
-        }
-
-        if (n == 0) {
-            return 0;
-        }
-
-        if (errno == EINTR) {
-            continue;
-        } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            return 0;
-        } else {
-            conn->errno = errno;
-        }
-    }
-
-    return NC_ERROR;
-}
-
-
-ssize_t
-mpc_conn_sendv(mpc_conn_t *conn, mpc_array_t *sendv, size_t nsend)
-{
-    ssize_t     n;
-
-    ASSERT(sendv->nelem > 0);
-    ASSERT(nsend != 0);
-
-    for (;;) {
-    }
-}
-

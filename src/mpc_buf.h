@@ -32,26 +32,6 @@
 #define __MPC_BUF_H_INCLUDED__
 
 
-typedef struct mpc_buf_s mpc_buf_t;
-typedef struct mpc_buf_hdr_s mpc_buf_hdr_t;
-typedef void (*mpc_buf_copy_pt)(mpc_buf_t *, void *);
-
-
-struct mpc_buf_s {
-#ifdef DEBUG
-    uint32_t                   magic;
-#endif
-    STAILQ_ENTRY(mpc_buf_t)    next;        /* next mpc_buf */
-    uint8_t                   *pos;         /* read marker */
-    uint8_t                   *last;        /* write marker */
-    uint8_t                   *start;       /* start of buffer */
-    uint8_t                   *end;         /* end of buffer */
-}
-
-
-STAILQ_HEAD(mpc_buf_hdr_s, mpc_buf_s);
-
-
 #define MPC_BUF_MAGIC       0x4d425546      /* "MBUF" */
 #define MPC_BUF_MIN_SIZE    512
 #define MPC_BUF_MAX_SIZE    65536
@@ -60,6 +40,27 @@ STAILQ_HEAD(mpc_buf_hdr_s, mpc_buf_s);
 
 #define mpc_buf_empty(buf)  (((buf)->pos == (buf)->last) ? 1 : 0)
 #define mpc_buf_full(buf)   (((buf)->last == (buf)->end) ? 1 : 0)
+
+
+typedef struct mpc_buf_s mpc_buf_t;
+typedef struct mpc_buf_hdr_s mpc_buf_hdr_t;
+typedef void (*mpc_buf_copy_pt)(mpc_buf_t *, void *);
+
+
+struct mpc_buf_s {
+#ifdef WITH_DEBUG
+    uint32_t                   magic;
+#endif
+    STAILQ_ENTRY(mpc_buf_s)    next;        /* next mpc_buf */
+    uint8_t                   *pos;         /* read marker */
+    uint8_t                   *last;        /* write marker */
+    uint8_t                   *start;       /* start of buffer */
+    uint8_t                   *end;         /* end of buffer */
+};
+
+
+STAILQ_HEAD(mpc_buf_hdr_s, mpc_buf_s);
+
 
 /*
  * Rewind the mpc_buf by discarding any of the read or unread data that it
@@ -85,6 +86,17 @@ STAILQ_HEAD(mpc_buf_hdr_s, mpc_buf_s);
  * cannot contain more than 2^32 bytes (4G).
  */
 #define mpc_buf_data_size         mpc_buf_offset
+
+
+void mpc_buf_init(void);
+void mpc_buf_deinit(void);
+void mpc_buf_put(mpc_buf_t *mpc_buf);
+void mpc_buf_insert(mpc_buf_hdr_t *mpc_hdr, mpc_buf_t *mpc_buf);
+void mpc_buf_remove(mpc_buf_hdr_t *mpc_hdr, mpc_buf_t *mpc_buf);
+void mpc_buf_copy(mpc_buf_t *mpc_buf, uint8_t *pos, size_t n);
+mpc_buf_t *mpc_buf_get(void);
+mpc_buf_t *mpc_buf_split(mpc_buf_hdr_t *h, uint8_t *pos, mpc_buf_copy_pt cb,
+    void *cbarg);
 
 
 #endif /* __MPC_BUF_H_INCLUDED__ */

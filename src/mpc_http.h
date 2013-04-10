@@ -28,29 +28,13 @@
  */
 
 
-#ifndef __MPC_NET_H_INCLUDED__
-#define __MPC_NET_H_INCLUDED__
+#ifndef __MPC_HTTP_H_INCLUDED__
+#define __MPC_HTTP_H_INCLUDED__
 
 
-#include <sys/un.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <arpa/inet.h>
+int mpc_http_parse_url(uint8_t *url, size_t n, mpc_url_t *mpc_url);
+int mpc_http_process_url(mpc_event_loop_t *el, mpc_url_t *mpc_url);
+int mpc_http_request(char *addr, mpc_event_loop_t *el, mpc_url_t *mpc_url);
 
 
-#define MPC_NET_NONE        0
-#define MPC_NET_NEEDATON    1
-#define MPC_NET_NONBLOCK    2
-
-int mpc_net_accept(int sockfd, struct sockaddr *sa, socklen_t *len);
-int mpc_net_nonblock(int fd);
-int mpc_net_read(int fd, uint8_t *buf, int count);
-int mpc_net_write(int fd, uint8_t *buf, int count);
-int mpc_net_tcp_server(char *ip, int port);
-int mpc_net_unix_server(char *path, mode_t perm);
-int mpc_net_tcp_connect(char *addr, int port, int flags);
-
-
-#endif /* __MPC_NET_H_INCLUDED__ */
+#endif /* __MPC_HTTP_H_INCLUDED__ */

@@ -35,30 +35,38 @@
 
 
 typedef struct mpc_conn_s mpc_conn_t;
+typedef struct mpc_conn_hdr_s mpc_conn_hdr_t;
 
 
 struct mpc_conn_s {
-#ifdef DEBUG
+#ifdef WITH_DEBUG
     uint32_t                    magic;
 #endif 
     TAILQ_ENTRY(mpc_conn_s)     next;
     int                         fd;
-    int                         family;
-    int                         errno;
+    int                         err;
     socklen_t                   addrlen;
     struct sockaddr            *addr;
-    mpc_buf_hdr_t              *rcv_buf;
-    mpc_buf_hdr_t              *snd_buf;
+    mpc_buf_hdr_t               rcv_buf_queue;
+    mpc_buf_hdr_t               snd_buf_queue;
+    mpc_buf_t                  *rcv_buf;
+    mpc_buf_t                  *snd_buf;
     size_t                      rcv_bytes;
     size_t                      snd_bytes;
 
     unsigned                    keepalive:1;
     unsigned                    connecting:1;
     unsigned                    connected:1;
-} mpc_conn_t;
+};
 
 
 TAILQ_HEAD(mpc_conn_hdr_s, mpc_conn_s);
+
+
+mpc_conn_t *mpc_conn_get(void);
+void mpc_conn_put(mpc_conn_t *conn);
+void mpc_conn_init(void);
+void mpc_conn_deinit(void);
 
 
 #endif /* __MPC_CONNECTION_H_INCLUDED__ */

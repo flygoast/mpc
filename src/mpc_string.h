@@ -40,7 +40,7 @@ typedef struct  {
 #define mpc_string(str)     { sizeof(str) - 1, (uint8_t *) str }
 #define mpc_null_string     { 0, NULL }
 #define mpc_str_set(str, text)  \
-    (str)->len = sizeof(str) - 1; (str)->data = (uint8_t *) text
+    (str)->len = sizeof(text) - 1; (str)->data = (uint8_t *) text
 #define mpc_str_null(str)   (str)->len = 0; (str)->data = NULL
 
 #define mpc_tolower(c)      (uint8_t) ((c >= 'A' && c <= 'Z') ? (c | 0x20) : c)

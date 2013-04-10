@@ -45,6 +45,9 @@
 #endif
 #endif
 
+#ifdef WITH_MPC_RESOLVER
+#include <mpc_resolver.c>
+#endif
 
 mpc_event_loop_t *
 mpc_create_event_loop(int setsize)

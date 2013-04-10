@@ -31,6 +31,7 @@
 #define __MPC_ALLOC_H_INCLUDED__
 
 
+#define mpc_alloc       malloc
 #define mpc_malloc      malloc
 #define mpc_calloc      calloc
 #define mpc_realloc     realloc

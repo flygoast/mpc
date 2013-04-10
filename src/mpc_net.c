@@ -104,17 +104,21 @@ mpc_net_nonblock(int fd)
 
 
 int
-mpc_net_read(int fd, char *buf, int count)
+mpc_net_read(int fd, uint8_t *buf, int count)
 {
     int n, len = 0;
 
     while (len != count) {
-        n = read(fd, buf, count - len);
+        n = read(fd, (char *)buf, count - len);
         if (n == 0) {
             return len;
         }
 
         if (n < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+
             return -1;
         }
 
@@ -127,17 +131,21 @@ mpc_net_read(int fd, char *buf, int count)
 
 
 int
-mpc_net_write(int fd, char *buf, int count)
+mpc_net_write(int fd, uint8_t *buf, int count)
 {
     int n, len = 0;
 
     while (len != count) {
-        n = write(fd, buf, count - len);
+        n = write(fd, (char *)buf, count - len);
         if (n == 0) {
             return len;
         }
 
         if (n < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+
             return -1;
         }
 
@@ -201,6 +209,47 @@ mpc_net_unix_server(char *path, mode_t perm)
 
     if (perm) {
         chmod(sa.sun_path, perm);
+    }
+
+    return sockfd;
+}
+
+
+int
+mpc_net_tcp_connect(char *addr, int port, int flags)
+{
+    int                 sockfd;
+    struct sockaddr_in  sa;
+
+    if ((sockfd = mpc_net_socket(AF_INET, SOCK_STREAM)) == MPC_ERROR) {
+        return MPC_ERROR;
+    }
+
+    sa.sin_family = AF_INET;
+    sa.sin_port = htons(port);
+
+    if (flags & MPC_NET_NEEDATON) {
+        if (inet_aton(addr, &sa.sin_addr) == 0) {
+            close(sockfd);
+            return MPC_ERROR;
+        }
+    } else {
+        memcpy(&sa.sin_addr, addr, sizeof(struct in_addr));
+    }
+
+    if (flags & MPC_NET_NONBLOCK) {
+        if (mpc_net_nonblock(sockfd) != MPC_OK) {
+            close(sockfd);
+            return MPC_ERROR;
+        }
+    }
+
+    if (connect(sockfd, (struct sockaddr *)&sa, sizeof(sa)) == -1) {
+        if (errno == EINPROGRESS && (flags & MPC_NET_NONBLOCK)) {
+            return sockfd;
+        }
+        close(sockfd);
+        return MPC_ERROR;
     }
 
     return sockfd;

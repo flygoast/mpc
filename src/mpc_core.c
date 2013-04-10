@@ -28,15 +28,15 @@
  */
 
 
-#include <pthread.h>
 #include <mpc_core.h>
 
 
 static int mpc_self_pipe[2];
 
-static void mpc_core_accept_handler(mpc_event_loop_t *mel, int fd, void *data,
+
+static void mpc_core_accept_handler(mpc_event_loop_t *el, int fd, void *data,
     int mask);
-static void mpc_core_notify_handler(mpc_event_loop_t *mel, int fd, void *data,
+static void mpc_core_notify_handler(mpc_event_loop_t *el, int fd, void *data,
     int mask);
 static void mpc_core_create_dispatch_thread(mpc_instance_t *ins);
 static void *mpc_core_submit(void *arg);
@@ -62,6 +62,8 @@ mpc_core_run(mpc_instance_t *ins)
     int                listen_fd;
     mpc_event_loop_t  *el;
 
+    mpc_buf_init();
+    mpc_conn_init();
     mpc_url_init();
 
     el = mpc_create_event_loop(MPC_DEFAULT_EVENT_SIZE);
@@ -104,11 +106,11 @@ mpc_core_run(mpc_instance_t *ins)
 
 
 static void
-mpc_core_accept_handler(mpc_event_loop_t *mel, int fd, void *data, int mask)
+mpc_core_accept_handler(mpc_event_loop_t *el, int fd, void *data, int mask)
 {
     mpc_instance_t  *ins = (mpc_instance_t *)data;
 
-    MPC_NOTUSED(mel);
+    MPC_NOTUSED(el);
     MPC_NOTUSED(mask);
     MPC_NOTUSED(data);
 
@@ -122,19 +124,39 @@ mpc_core_accept_handler(mpc_event_loop_t *mel, int fd, void *data, int mask)
 
 
 static void
-mpc_core_notify_handler(mpc_event_loop_t *mel, int fd, void *data, int mask)
+mpc_core_notify_handler(mpc_event_loop_t *el, int fd, void *data, int mask)
 {
-    int     n;
-    char    buf[1024];
+    int          n;
+    char         buf[1024];
+    mpc_url_t   *mpc_url;
 
     for (;;) {
         n = read(fd, buf, 1024);
         buf[n] = '\0';
         if (n < 0) {
+            if (errno != EAGAIN) {
+                MPC_BUG();
+            }
             break;
         }
 
-        printf("%d\n", n);
+        if (n == 0) {
+            mpc_log_stderr("pipe write end closed abnormally");
+            MPC_BUG();
+        }
+
+        do {
+            mpc_url = mpc_url_task_get();
+            if (mpc_url == NULL) {
+                MPC_BUG();
+            }
+
+            if (mpc_http_process_url(el, mpc_url) != MPC_OK) {
+                mpc_log_stderr("process url failed");
+            }
+
+            mpc_url_put(mpc_url);
+        } while (--n);
     }
 }
 
@@ -193,13 +215,36 @@ mpc_core_submit(void *arg)
                 continue;
             }
 
-            /* TODO: check protocol here */
             mpc_url = mpc_url_get();
+            if (mpc_url == NULL) {
+                mpc_log_stderr("oom!");
+                exit(1);
+            }
+
+            if (mpc_url->buf == NULL) {
+                mpc_url->buf_size = 1024;
+                mpc_url->buf = mpc_calloc(1024, 1);
+
+                if (mpc_url->buf == NULL) {
+                    mpc_log_stderr("oom!");
+                    exit(1);
+                }
+            }
+
+            snprintf((char *)mpc_url->buf, mpc_url->buf_size, "%s", ptr);
+            if (mpc_http_parse_url(mpc_url->buf, mpc_url->buf_size, mpc_url)
+                != MPC_OK)
+            {
+                exit(1);
+            }
+
+            mpc_url_task_insert(mpc_url);
 
             if (mpc_core_notify() < 0) {
                 mpc_log_stderr("notify failed");
                 exit(1);
             }
+            sched_yield();
         }
 
     } else {
@@ -210,3 +255,6 @@ mpc_core_submit(void *arg)
 
     return NULL;
 }
+
+
+
