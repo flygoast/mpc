@@ -101,7 +101,8 @@ typedef struct {
 } mpc_instance_t;
 
 
+int mpc_core_init(mpc_instance_t *ins);
 int mpc_core_run(mpc_instance_t *ins);
-
+int mpc_core_deinit(mpc_instance_t *ins);
 
 #endif /* __MPC_CORE_H_INCLUDED__ */

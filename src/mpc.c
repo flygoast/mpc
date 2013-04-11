@@ -201,7 +201,15 @@ main(int argc, char **argv)
         exit(0);
     }
 
-    if (mpc_core_run(ins) == MPC_ERROR) {
+    if (mpc_core_init(ins) != MPC_OK) {
+        exit(1);
+    }
+
+    if (mpc_core_run(ins) != MPC_OK) {
+        exit(1);
+    }
+
+    if (mpc_core_deinit(ins) != MPC_OK) {
         exit(1);
     }
 

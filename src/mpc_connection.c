@@ -57,18 +57,7 @@ mpc_conn_get(void)
         SET_MAGIC(conn, MPC_CONN_MAGIC);
     }
 
-    conn->fd = -1;
-
-    STAILQ_INIT(&conn->rcv_buf_queue);
-    STAILQ_INIT(&conn->snd_buf_queue);
-
-    conn->rcv_buf = NULL;
-    conn->snd_buf = NULL;
-    conn->rcv_bytes = 0;
-    conn->snd_bytes = 0;
-    
-    conn->connecting = 0;
-    conn->connected = 0;
+    mpc_conn_reset(conn);
 
     return conn;
 }
@@ -84,8 +73,7 @@ mpc_conn_free(mpc_conn_t *conn)
 void
 mpc_conn_put(mpc_conn_t *conn)
 {
-    ASSERT(conn->magic == MPC_CONN_MAGIC);
-    ASSERT(conn->fd < 0);
+    mpc_conn_reset(conn);
     mpc_conn_nfree++;
     TAILQ_INSERT_HEAD(&mpc_conn_free_queue, conn, next);
 }
@@ -114,4 +102,107 @@ mpc_conn_deinit(void)
     }
 
     ASSERT(mpc_conn_nfree == 0);
+}
+
+
+int
+mpc_conn_recv(mpc_conn_t *conn)
+{
+    int          n;
+    mpc_buf_t   *mpc_buf;
+
+    ASSERT(conn->rcv_bytes == 0);
+
+    for (;;) {
+        n = mpc_net_read(conn->fd, conn->rcv_buf->last, 
+                         conn->rcv_buf->end - conn->rcv_buf->last);
+        if (n < 0) {
+            if (errno == EAGAIN) {
+                break;
+            }
+            return -1;
+        }
+
+        if (n == 0) {
+            conn->eof = 1;
+            return 0;
+        }
+
+        conn->rcv_bytes += n;
+        conn->rcv_buf->last += n;
+
+        if (conn->rcv_buf->end == conn->rcv_buf->last) {
+            mpc_buf = mpc_buf_get();
+            mpc_buf_insert(&conn->rcv_buf_queue, mpc_buf);
+            conn->rcv_buf = mpc_buf;
+        }
+    }
+
+    return conn->rcv_bytes;
+}
+
+
+void
+mpc_conn_reset(mpc_conn_t *conn)
+{
+    ASSERT(conn->magic == MPC_CONN_MAGIC); 
+
+    conn->fd = -1;
+
+    STAILQ_INIT(&conn->rcv_buf_queue);
+    STAILQ_INIT(&conn->snd_buf_queue);
+
+    conn->rcv_buf = NULL;
+    conn->snd_buf = NULL;
+
+    conn->rcv_bytes = 0;
+    conn->snd_bytes = 0;
+    
+    conn->keepalive = 0;
+    conn->connecting = 0;
+    conn->connected = 0;
+    conn->eof = 0;
+    conn->done = 0;
+}
+
+
+int
+mpc_conn_send(mpc_conn_t *conn)
+{
+    int          n;
+
+    ASSERT(conn->snd_bytes == 0);
+    ASSERT(conn->snd_buf == STAILQ_FIRST(&conn->snd_buf_queue));
+
+    for (;;) {
+        n = mpc_net_write(conn->fd, conn->snd_buf->pos, 
+                          conn->snd_buf->last - conn->snd_buf->pos);
+        if (n < 0) {
+            if (errno == EAGAIN) {
+                break;
+            }
+            return -1;
+        }
+
+        if (n == 0) {
+            return 0;
+        }
+
+        conn->snd_buf->pos += n;
+        conn->snd_bytes += n;
+
+        if (conn->snd_buf->pos == conn->snd_buf->last) {
+            STAILQ_REMOVE_HEAD(&conn->snd_buf_queue, next);
+            mpc_buf_put(conn->snd_buf);
+            if (STAILQ_EMPTY(&conn->snd_buf_queue)) {
+                conn->snd_buf = NULL;
+                conn->done = 1;
+                break;
+            } else {
+                conn->snd_buf = STAILQ_FIRST(&conn->snd_buf_queue);
+            }
+        }
+    }
+
+    return conn->snd_bytes;
 }

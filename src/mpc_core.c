@@ -57,14 +57,28 @@ mpc_core_create_dispatch_thread(mpc_instance_t *ins)
 
 
 int
+mpc_core_init(mpc_instance_t *ins)
+{
+    mpc_buf_init();
+    mpc_conn_init();
+    mpc_url_init();
+
+    return MPC_OK;
+}
+
+
+int
+mpc_core_deinit(mpc_instance_t *ins)
+{
+    return MPC_OK;
+}
+
+
+int
 mpc_core_run(mpc_instance_t *ins)
 {
     int                listen_fd;
     mpc_event_loop_t  *el;
-
-    mpc_buf_init();
-    mpc_conn_init();
-    mpc_url_init();
 
     el = mpc_create_event_loop(MPC_DEFAULT_EVENT_SIZE);
     if (el == NULL) {
@@ -247,6 +261,8 @@ mpc_core_submit(void *arg)
             sched_yield();
         }
 
+        fclose(fp);
+
     } else {
         for (;;) {
             mpc_nanosleep(0.001);
@@ -255,6 +271,3 @@ mpc_core_submit(void *arg)
 
     return NULL;
 }
-
-
-

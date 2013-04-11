@@ -81,7 +81,7 @@ mpc_http_parse_url(uint8_t *url, size_t n, mpc_url_t *mpc_url)
             if (c == '/') {
                 mpc_url->host.len = url - 1 - mpc_url->host.data;
                 state = sw_uri;
-                mpc_url->uri.data = url;
+                mpc_url->uri.data = url - 1;
                 break;
             }
             break;
@@ -92,7 +92,7 @@ mpc_http_parse_url(uint8_t *url, size_t n, mpc_url_t *mpc_url)
                     return MPC_ERROR;
                 }
                 state = sw_uri;
-                mpc_url->uri.data = url;
+                mpc_url->uri.data = url - 1;
                 break;
             }
             break;
@@ -202,11 +202,13 @@ mpc_http_connect_handler(mpc_event_loop_t *el, int fd, void *data, int mask)
 
     conn->connected = 1;
 
-    n = mpc_net_write(fd, conn->snd_buf->pos, 
-                      conn->snd_buf->last - conn->snd_buf->pos);
-    conn->snd_buf->pos += n;
+    n = mpc_conn_send(conn);
 
-    if (conn->snd_buf->last == conn->snd_buf->pos) {
+    if (n < 0) {
+        mpc_log_stderr("%s\n", strerror(errno));
+    }
+
+    if (conn->done) {
         mpc_delete_file_event(el, fd, MPC_WRITABLE);
 
         if (mpc_create_file_event(el, fd, MPC_READABLE,
@@ -235,22 +237,14 @@ mpc_http_request_snd_handler(mpc_event_loop_t *el, int fd, void *data, int mask)
     mpc_conn_t  *conn = (mpc_conn_t *)data;
     int          n;
 
-    do {
-        n = mpc_net_write(fd, conn->snd_buf->pos, 
-                          conn->snd_buf->last - conn->snd_buf->pos);
-    
-        if (n < 0) {
-            if (errno == EAGAIN) {
-                break;
-            }
-            mpc_log_stderr("%s", strerror(errno));
-        }
+    n = mpc_conn_send(conn);
 
-        conn->snd_buf->pos += n;
+    if (n < 0) {
+        mpc_log_stderr("send request failed");
+        return;
+    }
 
-    } while (n > 0);
-
-    if (conn->snd_buf->last == conn->snd_buf->pos) {
+    if (conn->done) {
         mpc_delete_file_event(el, fd, MPC_WRITABLE);
 
         if (mpc_create_file_event(el, fd, MPC_READABLE,
@@ -271,24 +265,17 @@ mpc_http_response_rcv_handler(mpc_event_loop_t *el, int fd, void *data,
     mpc_conn_t  *conn = (mpc_conn_t *)data;
     int          n;
 
-    do {
-        n = mpc_net_read(fd, conn->rcv_buf->last, 
-                         conn->rcv_buf->end - conn->rcv_buf->last);
-        conn->rcv_buf->last += n;
-
-        if (n < 0) {
-            if (errno == EAGAIN) {
-                break;
-            }
-            mpc_log_stderr("%s", strerror(errno));
-        } else if (n == 0) {
-            mpc_delete_file_event(el, fd, MPC_READABLE);
-            close(fd);
-        }
-    } while (n > 0);
-
-    /* TODO */
+    n = mpc_conn_recv(conn);
+    if (n < 0) {
+        mpc_log_stderr("recv response failed");
+        return;
+    }
     
+    printf("%.*s\n", (int)(conn->rcv_buf->last - conn->rcv_buf->start),
+           conn->rcv_buf->start);
+
+    conn->rcv_buf->last = conn->rcv_buf->start;
+
     mpc_http_response_parse(conn);
 }
 
@@ -296,6 +283,5 @@ mpc_http_response_rcv_handler(mpc_event_loop_t *el, int fd, void *data,
 int
 mpc_http_response_parse(mpc_conn_t *conn)
 {
-
     return MPC_OK;
 }
