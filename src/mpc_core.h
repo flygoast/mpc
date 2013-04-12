@@ -47,6 +47,7 @@
 #include <pthread.h>
 #include <mpc_queue.h>
 #include <mpc_string.h>
+#include <mpc_array.h>
 #include <mpc_alloc.h>
 #include <mpc_util.h>
 #include <mpc_log.h>
@@ -67,6 +68,7 @@
 
 #define MPC_OK                  0
 #define MPC_ERROR               -1
+#define MPC_AGAIN               -2
 
 #define MPC_NOTUSED(V)          ((void)V)
 #define MPC_DO_NOTHING()        /* nothing */
@@ -92,7 +94,6 @@
 #endif
 
 
-
 typedef struct {
     char    *conf_filename;
     char    *input_filename;
@@ -104,5 +105,6 @@ typedef struct {
 int mpc_core_init(mpc_instance_t *ins);
 int mpc_core_run(mpc_instance_t *ins);
 int mpc_core_deinit(mpc_instance_t *ins);
+
 
 #endif /* __MPC_CORE_H_INCLUDED__ */

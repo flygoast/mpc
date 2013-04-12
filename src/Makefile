@@ -7,6 +7,7 @@ OO = mpc.o 				\
 	 mpc_core.o			\
 	 mpc_util.o 		\
 	 mpc_log.o 			\
+	 mpc_array.o 		\
 	 mpc_event.o 		\
 	 mpc_net.o			\
 	 mpc_url.o			\

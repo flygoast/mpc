@@ -67,4 +67,17 @@ mpc_array_set(mpc_array_t *a, void *elem, size_t size, uint32_t nalloc)
 }
 
 
+mpc_array_t *mpc_array_create(uint32_t n, size_t size);
+void mpc_array_destroy(mpc_array_t *a);
+int mpc_array_init(mpc_array_t *a, uint32_t n, size_t size);
+void mpc_array_deinit(mpc_array_t *a);
+void *mpc_array_push(mpc_array_t *a);
+void *mpc_array_pop(mpc_array_t *a);
+void *mpc_array_get(mpc_array_t *a, uint32_t idx);
+void *mpc_array_top(mpc_array_t *a);
+void mpc_array_swap(mpc_array_t *a, mpc_array_t *b);
+void mpc_array_sort(mpc_array_t *a, mpc_array_cmp_pt cmp);
+int mpc_array_each(mpc_array_t *a, mpc_array_each_pt func, void *data);
+
+
 #endif /* __MPC_ARRAY_H_INCLUDED__ */

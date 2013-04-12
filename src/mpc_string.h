@@ -57,6 +57,8 @@ typedef struct  {
 #define mpc_strlen(s)           strlen((char *)(s))
 #define mpc_strcmp(s1, s2)      strcmp((char *)(s1), (char *)(s2))
 #define mpc_strncmp(s1, s2, n)  strncmp((char *)(s1), (char *)(s2), n)
+#define mpc_strncasecmp(s1, s2, n)  \
+    strncasecmp((char *)(s1), (char *)(s2), n)
 #define mpc_strdup(s)           strdup((char *)(s))
 #define mpc_strndup(s, n)       strndup((char *)(s), n) 
 #define mpc_strlchr(s, l, c)    \

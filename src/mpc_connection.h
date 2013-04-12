@@ -53,7 +53,6 @@ struct mpc_conn_s {
     mpc_buf_t                  *snd_buf;
     size_t                      rcv_bytes;
     size_t                      snd_bytes;
-
     unsigned                    keepalive:1;
     unsigned                    eof:1;
     unsigned                    done:1;
@@ -71,7 +70,6 @@ void mpc_conn_init(void);
 void mpc_conn_deinit(void);
 int mpc_conn_recv(mpc_conn_t *conn);
 int mpc_conn_send(mpc_conn_t *conn);
-void mpc_conn_reset(mpc_conn_t *conn);
 
 
 #endif /* __MPC_CONNECTION_H_INCLUDED__ */

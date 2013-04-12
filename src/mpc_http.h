@@ -32,6 +32,53 @@
 #define __MPC_HTTP_H_INCLUDED__
 
 
+#define MPC_HTTP_MAGIC      0x48545450  /* "HTTP" */
+
+
+typedef struct mpc_http_s mpc_http_t;
+typedef struct mpc_http_hdr_s mpc_http_hdr_t;
+
+
+typedef struct {
+    uint32_t     http_version;
+    uint32_t     code;
+    uint32_t     count;
+    uint8_t     *start;
+    uint8_t     *end;
+} mpc_http_status_t;
+
+
+typedef struct {
+    mpc_str_t   name;
+    mpc_str_t   value;
+} mpc_http_header_t;
+
+
+struct mpc_http_s {
+#ifdef WITH_DEBUG
+    uint32_t                 magic;
+#endif
+    TAILQ_ENTRY(mpc_http_s)  next;
+    mpc_conn_t              *conn;
+    int                      http_major;
+    int                      http_minor;
+    mpc_buf_t               *buf;
+    mpc_http_status_t        status;
+    int                      state;
+    mpc_array_t             *headers;
+    int                      invalid_header;
+    uint8_t                 *header_name_start;
+    uint8_t                 *header_name_end;
+    uint8_t                 *header_start;
+    uint8_t                 *header_end;
+    int                      content_length_n;
+    int                      content_length_received;
+};
+
+
+TAILQ_HEAD(mpc_http_hdr_s, mpc_http_s);
+
+
 int mpc_http_parse_url(uint8_t *url, size_t n, mpc_url_t *mpc_url);
 int mpc_http_process_url(mpc_event_loop_t *el, mpc_url_t *mpc_url);
 int mpc_http_request(char *addr, mpc_event_loop_t *el, mpc_url_t *mpc_url);

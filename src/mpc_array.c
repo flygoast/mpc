@@ -175,7 +175,7 @@ mpc_array_top(mpc_array_t *a)
 {
     ASSERT(a->nelem != 0);
 
-    return array_get(a, a->nelem - 1);
+    return mpc_array_get(a, a->nelem - 1);
 }
 
 
@@ -217,7 +217,7 @@ mpc_array_each(mpc_array_t *a, mpc_array_each_pt func, void *data)
     ASSERT(func != NULL);
 
     for (i = 0, nelem = a->nelem; i < nelem; i++) {
-        elem = array_get(a, i);
+        elem = mpc_array_get(a, i);
 
         rc = func(elem, data);
         if (rc != MPC_OK) {

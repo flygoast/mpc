@@ -35,6 +35,9 @@ static uint32_t         mpc_conn_nfree;
 static mpc_conn_hdr_t   mpc_conn_free_queue;
 
 
+static void mpc_conn_reset(mpc_conn_t *conn);
+
+
 mpc_conn_t *
 mpc_conn_get(void)
 {
@@ -111,13 +114,12 @@ mpc_conn_recv(mpc_conn_t *conn)
     int          n;
     mpc_buf_t   *mpc_buf;
 
-    ASSERT(conn->rcv_bytes == 0);
-
     for (;;) {
         n = mpc_net_read(conn->fd, conn->rcv_buf->last, 
                          conn->rcv_buf->end - conn->rcv_buf->last);
         if (n < 0) {
             if (errno == EAGAIN) {
+                n = 0;
                 break;
             }
             return -1;
@@ -138,11 +140,11 @@ mpc_conn_recv(mpc_conn_t *conn)
         }
     }
 
-    return conn->rcv_bytes;
+    return n;
 }
 
 
-void
+static void
 mpc_conn_reset(mpc_conn_t *conn)
 {
     ASSERT(conn->magic == MPC_CONN_MAGIC); 
@@ -157,7 +159,7 @@ mpc_conn_reset(mpc_conn_t *conn)
 
     conn->rcv_bytes = 0;
     conn->snd_bytes = 0;
-    
+
     conn->keepalive = 0;
     conn->connecting = 0;
     conn->connected = 0;
@@ -171,7 +173,6 @@ mpc_conn_send(mpc_conn_t *conn)
 {
     int          n;
 
-    ASSERT(conn->snd_bytes == 0);
     ASSERT(conn->snd_buf == STAILQ_FIRST(&conn->snd_buf_queue));
 
     for (;;) {
@@ -179,6 +180,7 @@ mpc_conn_send(mpc_conn_t *conn)
                           conn->snd_buf->last - conn->snd_buf->pos);
         if (n < 0) {
             if (errno == EAGAIN) {
+                n = 0;
                 break;
             }
             return -1;
@@ -204,5 +206,5 @@ mpc_conn_send(mpc_conn_t *conn)
         }
     }
 
-    return conn->snd_bytes;
+    return n;
 }
