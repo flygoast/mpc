@@ -31,6 +31,7 @@
 #ifndef __MPC_STRING_H_INCLUDED__
 #define __MPC_STRING_H_INCLUDED__
 
+
 typedef struct  {
     size_t     len;
     uint8_t   *data;
@@ -46,29 +47,24 @@ typedef struct  {
 #define mpc_tolower(c)      (uint8_t) ((c >= 'A' && c <= 'Z') ? (c | 0x20) : c)
 #define mpc_toupper(c)      (uint8_t) ((c >= 'a' && c <= 'z') ? (c & ~0x20) : c)
 
-#define mpc_str_empty(str)  ((str)->len == 0 ? 1 : 0)
-#define mpc_str_dup(dst, src)   \
-    mpc_str_cpy(dst, src, (src)->len)
+void mpc_strlow(uint8_t *dst, uint8_t *src, size_t n);
 
 
-#define mpc_memcpy(d, c, n)     memcpy(d, c, n)
-#define mpc_memmove(d, c, n)    memmove(d, c, n)
-#define mpc_memchr(d, c, n)     memchr(d, c, n)
-#define mpc_strlen(s)           strlen((char *)(s))
-#define mpc_strcmp(s1, s2)      strcmp((char *)(s1), (char *)(s2))
-#define mpc_strncmp(s1, s2, n)  strncmp((char *)(s1), (char *)(s2), n)
-#define mpc_strncasecmp(s1, s2, n)  \
-    strncasecmp((char *)(s1), (char *)(s2), n)
-#define mpc_strdup(s)           strdup((char *)(s))
-#define mpc_strndup(s, n)       strndup((char *)(s), n) 
-#define mpc_strlchr(s, l, c)    \
-    _mpc_strlchr((uint8_t *)(s), (uint8_t *)(l), (uint8_t)(c))
+#define mpc_strncmp(s1, s2, n)  \
+    strncmp((const char *)(s1), (const char *)(s2), n)
+
+#define mpc_strcmp(s1, s2)      strcmp((const char *)(s1), (const char *)(s2))
+#define mpc_strstr(s1, s2)      strstr((const char *)(s1), (const char *)(s2))
+#define mpc_strlen(s)           strlen((const char *)(s))
+
+#define mpc_strchr(s1, c)       strchr((char char *)s1, (int)c)
 
 
 static inline uint8_t *
-_mpc_strlchr(uint8_t *p, uint8_t *last, uint8_t c) 
+mpc_strlchr(uint8_t *p, uint8_t *last, uint8_t c) 
 {
     while (p < last) {
+
         if (*p == c) {
             return p;
         }
@@ -78,6 +74,33 @@ _mpc_strlchr(uint8_t *p, uint8_t *last, uint8_t c)
 
     return NULL;
 }
+
+
+#define mpc_memzero(buf, n)     (void) memset(buf, 0, n)
+#define mpc_memset(buf, c, n)   (void) memset(buf, c, n)
+
+#define mpc_memcpy(dst, src, n) (void) memcpy(dst, src, n)
+#define mpc_cpymem(dst, src, n) (((uint8_t *)memcpy(dst, src, n)) + (n))
+
+#define mpc_memmove(dst, src, n)    (void) memmove(dst, src, n)
+#define mpc_movemem(dst, src, n)    (((uint8_t *) memmove(dst, src, n)) + (n))
+
+#define mpc_memcmp(s1, s2, n)   memcmp((const char *)s1, (const char *)s2, n)
+
+
+uint8_t *mpc_cpystrn(uint8_t *dst, uint8_t *src, size_t n);
+uint8_t *mpc_sprintf(uint8_t *buf, const char *fmt, ...);
+uint8_t *mpc_snprintf(uint8_t *buf, size_t max, const char *fmt, ...);
+uint8_t *mpc_slprintf(uint8_t *buf, uint8_t *last, const char *fmt, ...);
+uint8_t *mpc_vslprintf(uint8_t *buf, uint8_t *last, const char *fmt,
+    va_list args);
+#define mpc_vsnprintf(buf, max, fmt, args)  \
+    mpc_vslprintf(buf, buf + (max), fmt, args)
+
+int mpc_strcasecmp(uint8_t *s1, uint8_t *s2);
+int mpc_strncasecmp(uint8_t *s1, uint8_t *s2, size_t n);
+uint8_t *mpc_strstrn(uint8_t *s1, char *s2, size_t n);
+uint8_t *mpc_strcasestrn(uint8_t *s1, char *s2, size_t n);
 
 
 #endif /* __MPC_STRING_H_INCLUDED__ */

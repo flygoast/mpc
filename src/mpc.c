@@ -95,14 +95,14 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
             break;
 
         case 'p':
-            ins->port = mpc_atoi(optarg, strlen(optarg));
+            ins->port = mpc_atoi((uint8_t *)optarg, strlen(optarg));
             if (ins->port == MPC_ERROR) {
-                mpc_log_stderr("option '-p' requires a number");
+                mpc_log_stderr(0, "option '-p' requires a number");
                 return MPC_ERROR;
             }
 
             if (ins->port < 1 || ins->port > UINT16_MAX) {
-                mpc_log_stderr("option '-p' value '%d' is not a valid port",
+                mpc_log_stderr(0, "option '-p' value '%d' is not a valid port",
                                ins->port); 
                 return MPC_ERROR;
             }
@@ -112,19 +112,19 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
             switch (optopt) {
             case 'f':
             case 'c':
-                mpc_log_stderr("option -%c requires a file name", optopt);
+                mpc_log_stderr(0, "option -%c requires a file name", optopt);
                 break;
 
             case 'a':
-                mpc_log_stderr("option -%c requires a string", optopt);
+                mpc_log_stderr(0, "option -%c requires a string", optopt);
                 break;
 
             case 'p':
-                mpc_log_stderr("option -%c requires a number", optopt);
+                mpc_log_stderr(0, "option -%c requires a number", optopt);
                 break;
 
             default:
-                mpc_log_stderr("invalid option -- '%c'", optopt);
+                mpc_log_stderr(0, "invalid option -- '%c'", optopt);
                 break;
             }
 
@@ -139,7 +139,7 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
 static void
 mpc_show_usage()
 {
-    
+
 }
 
 
@@ -157,6 +157,13 @@ mpc_set_default_option(mpc_instance_t *ins)
     ins->input_filename = NULL;
     ins->addr = NULL;
     ins->port = MPC_DEFAULT_PORT;
+
+    ins->log_level = MPC_LOG_INFO;
+    ins->log_file = NULL;
+
+    ins->el = NULL;
+    ins->self_pipe[0] = -1;
+    ins->self_pipe[1] = -1;
 }
 
 
@@ -166,9 +173,9 @@ main(int argc, char **argv)
     int              rc;
     mpc_instance_t  *ins;
 
-    ins = (mpc_instance_t *)mpc_malloc(sizeof(mpc_instance_t));
+    ins = (mpc_instance_t *)mpc_calloc(sizeof(mpc_instance_t), 1);
     if (ins == NULL) {
-        mpc_log_stderr("oom!");
+        mpc_log_stderr(errno, "oom!");
         exit(1);
     }
     
@@ -181,11 +188,12 @@ main(int argc, char **argv)
     }
 
     if (show_version) {
-        mpc_log_stderr("mpc: Multiple Protocol Client" CRLF
-                       "Version: %s" CRLF
-                       "Copyright (c) 2013, FengGu, <flygoast@gmail.com>" CRLF
-                       "Repo: https://github.com/flygoast/mpc",
-                       MPC_VERSION_STR);
+        mpc_log_stderr(0, "mpc: Multiple Protocol Client" CRLF
+                          "Version: %s" CRLF
+                          "Copyright (c) 2013, "
+                          "FengGu, <flygoast@gmail.com>" CRLF
+                          "Repo: https://github.com/flygoast/mpc",
+                          MPC_VERSION_STR);
 
         if (show_help) {
             mpc_show_usage();

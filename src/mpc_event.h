@@ -93,6 +93,7 @@ struct mpc_event_loop_s {
     mpc_fired_event_t          *fired;
     mpc_time_event_t           *time_event_head;
     int                         stop;
+    int                         exit_code;
     void                       *api_data;
     mpc_event_before_sleep_pt   before_sleep_ptr;
 };
@@ -105,7 +106,7 @@ struct mpc_event_loop_s {
 
 mpc_event_loop_t *mpc_create_event_loop(int setsize);
 void mpc_free_event_loop(mpc_event_loop_t *el);
-void mpc_event_stop(mpc_event_loop_t *el);
+void mpc_event_stop(mpc_event_loop_t *el, int exit);
 int mpc_create_file_event(mpc_event_loop_t *el, int fd, int mask,
     mpc_event_file_pt file_ptr, void *data);
 void mpc_delete_file_event(mpc_event_loop_t *el, int fd, int mask);

@@ -141,3 +141,41 @@ mpc_gethostbyname(mpc_event_loop_t *el, mpc_gethostbyname_cb callback,
         }
     }
 }
+
+
+#if 0
+static void *
+mpc_resolver_key_dup(void *privdata, const void *key) {
+    mpc_str_t  *domain = (mpc_str_t *)key;
+    mpc_str_t  *keydup = mpc_strndup(domain.data, domain.len);
+
+    DICT_NOTUSED(privdata);
+
+    return keydup;
+}
+
+
+static int
+mpc_resolver_key_cmp(void *privdata, const void *key1, 
+        const void *key2) {
+    DICT_NOTUSED(privdata);
+
+    return mpc_strcasecmp(key1, key2) == 0;
+}
+
+
+static void _demo_destructor(void *privdata, void *key) {
+    DICT_NOTUSED(privdata);
+    mpc_str_free(key);
+}
+
+
+dict_type mpc_resolver_cache_dict = {
+    dict_gen_case_hash,         /* hash function */   
+    mpc_resolver_key_dup,       /* key dup */
+    NULL,                       /* val dup */
+    mpc_resolver_key_cmp,       /* key compare */
+    mpc_resolver_key_destruct,  /* key destructor */
+    NULL,                       /* val destructor */
+};
+#endif

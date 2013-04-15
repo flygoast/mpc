@@ -111,7 +111,7 @@ mpc_net_read(int fd, uint8_t *buf, int count)
     while (len != count) {
         n = read(fd, (char *)buf, count - len);
         if (n == 0) {
-            return len;
+            return len; /* EOF */
         }
 
         if (n < 0) {

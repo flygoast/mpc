@@ -223,10 +223,10 @@ mpc_http_gethostbyname_cb(mpc_event_loop_t *el, int status,
 {
     if (status == MPC_RESOLVER_OK) {
         if (mpc_http_request(host->h_addr, el, (mpc_url_t *)arg) != MPC_OK) {
-            mpc_log_stderr("failed");
+            mpc_log_stderr(0, "failed");
         }
     } else {
-        mpc_log_stderr("%s", ares_strerror(status));
+        mpc_log_stderr(0, "%s", ares_strerror(status));
     }
 }
 
@@ -241,13 +241,13 @@ mpc_http_request(char *addr, mpc_event_loop_t *el, mpc_url_t *mpc_url)
 
     conn = mpc_conn_get();
     if (conn == NULL) {
-        mpc_log_stderr("mpc_conn_get failed");
+        mpc_log_stderr(0, "mpc_conn_get failed");
         return MPC_ERROR;
     }
 
     rcv_buf = mpc_buf_get();
     if (rcv_buf == NULL) {
-        mpc_log_stderr("mpc_buf_get failed");
+        mpc_log_stderr(0, "mpc_buf_get failed");
         return MPC_ERROR;
     }
     mpc_buf_insert(&conn->rcv_buf_queue, rcv_buf);
@@ -255,7 +255,7 @@ mpc_http_request(char *addr, mpc_event_loop_t *el, mpc_url_t *mpc_url)
 
     snd_buf = mpc_buf_get();
     if (snd_buf == NULL) {
-        mpc_log_stderr("mpc_buf_get failed");
+        mpc_log_stderr(0, "mpc_buf_get failed");
         return MPC_ERROR;
     }
     mpc_buf_insert(&conn->snd_buf_queue, snd_buf);
@@ -274,7 +274,7 @@ mpc_http_request(char *addr, mpc_event_loop_t *el, mpc_url_t *mpc_url)
 
     sockfd = mpc_net_tcp_connect(addr, mpc_url->port, MPC_NET_NONBLOCK);
     if (sockfd == MPC_ERROR) {
-        mpc_log_stderr("mpc_net_tcp_connect failed");
+        mpc_log_stderr(0, "mpc_net_tcp_connect failed");
         return MPC_ERROR;
     }
 
@@ -283,7 +283,7 @@ mpc_http_request(char *addr, mpc_event_loop_t *el, mpc_url_t *mpc_url)
 
     http = mpc_http_get();
     if (http == NULL) {
-        mpc_log_stderr("mpc_http_get failed");
+        mpc_log_stderr(0, "mpc_http_get failed");
         return MPC_ERROR;
     }
     http->conn = conn;
@@ -293,7 +293,7 @@ mpc_http_request(char *addr, mpc_event_loop_t *el, mpc_url_t *mpc_url)
         == MPC_ERROR)
     {
         close(sockfd);
-        mpc_log_stderr("mpc_event_create_file_event failed");
+        mpc_log_stderr(0, "mpc_event_create_file_event failed");
         return MPC_ERROR;
     }
 
@@ -314,7 +314,7 @@ mpc_http_connect_handler(mpc_event_loop_t *el, int fd, void *data, int mask)
     n = mpc_conn_send(conn);
 
     if (n < 0) {
-        mpc_log_stderr("%s\n", strerror(errno));
+        mpc_log_stderr(0, "%s\n", strerror(errno));
         return;
     }
 
@@ -352,7 +352,7 @@ mpc_http_request_snd_handler(mpc_event_loop_t *el, int fd, void *data, int mask)
     n = mpc_conn_send(conn);
 
     if (n < 0) {
-        mpc_log_stderr("send request failed");
+        mpc_log_stderr(0, "send request failed");
         return;
     }
 
@@ -382,7 +382,7 @@ mpc_http_process_status_line(mpc_event_loop_t *el, int fd, void *data,
 
     n = mpc_conn_recv(conn);
     if (n < 0) {
-        mpc_log_stderr("recv response failed: (%d) %s", errno, strerror(errno));
+        mpc_log_stderr(0, "recv response failed: (%d) %s", errno, strerror(errno));
         return;
     }
 
@@ -395,7 +395,7 @@ mpc_http_process_status_line(mpc_event_loop_t *el, int fd, void *data,
     rc = mpc_http_parse_status_line(http);
 
     if (rc == MPC_ERROR) {
-        mpc_log_stderr("parse status failed: %s", strerror(errno));
+        mpc_log_stderr(0, "parse status failed: %s", strerror(errno));
         return;
 
     } else if (rc == MPC_AGAIN) {
@@ -404,7 +404,7 @@ mpc_http_process_status_line(mpc_event_loop_t *el, int fd, void *data,
 
     rc = mpc_http_process_headers(http);
     if (rc == MPC_ERROR) {
-        mpc_log_stderr("parse status failed: %s", strerror(errno));
+        mpc_log_stderr(0, "parse status failed: %s", strerror(errno));
         return;
     } else if (rc == MPC_AGAIN) {
         if (mpc_create_file_event(el, fd, MPC_READABLE,
@@ -420,7 +420,7 @@ mpc_http_process_status_line(mpc_event_loop_t *el, int fd, void *data,
 
     rc = mpc_http_process_body(http);
     if (rc == MPC_ERROR) {
-        mpc_log_stderr("parse status failed: %s", strerror(errno));
+        mpc_log_stderr(0, "parse status failed: %s", strerror(errno));
         return;
     } else if (rc == MPC_AGAIN) {
         return;
@@ -442,7 +442,7 @@ mpc_http_process_headers_handler(mpc_event_loop_t *el, int fd, void *data,
 
     rc = mpc_http_process_headers(http);
     if (rc == MPC_ERROR) {
-        mpc_log_stderr("parse status failed: %s", strerror(errno));
+        mpc_log_stderr(0, "parse status failed: %s", strerror(errno));
         return;
 
     } else if (rc == MPC_AGAIN) {
@@ -451,13 +451,14 @@ mpc_http_process_headers_handler(mpc_event_loop_t *el, int fd, void *data,
 
     rc = mpc_http_process_body(http);
     if (rc == MPC_ERROR) {
-        mpc_log_stderr("parse status failed: %s", strerror(errno));
+        mpc_log_stderr(0, "parse status failed: %s", strerror(errno));
         return;
     } else if (rc == MPC_AGAIN) {
         return;
     }
 
     if (http->conn->eof) {
+        printf("Server close connection\n");
         /* TODO */
         return;
     }
@@ -953,8 +954,9 @@ mpc_http_process_headers(mpc_http_t *http)
             header->value.len = http->header_end - http->header_start;
 
             /* ugly code */
-            if (header->name.len == sizeof("Content-Length") 
-                && mpc_strncasecmp(header->name.data, "Content-Length",
+            if (header->name.len == sizeof("Content-Length")
+                && mpc_strncasecmp(header->name.data, 
+                                   (uint8_t *)"Content-Length",
                                    sizeof("Content-Length")))
             {
                 http->content_length_n = mpc_atoi(header->value.data,
@@ -996,11 +998,12 @@ mpc_http_process_body(mpc_http_t *http)
     }
 
     if (http->content_length_received == http->content_length_n) {
+        printf("ok\n");
         return MPC_OK;
     }
 
     if (http->conn->eof) {
-        mpc_log_stderr("unmatch content-length");
+        mpc_log_stderr(0, "unmatch content-length");
         return MPC_ERROR;
     }
 

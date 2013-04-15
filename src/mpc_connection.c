@@ -111,27 +111,32 @@ mpc_conn_deinit(void)
 int
 mpc_conn_recv(mpc_conn_t *conn)
 {
-    int          n;
+    int          n, sum;
     mpc_buf_t   *mpc_buf;
 
+    sum = 0;
     for (;;) {
-        n = mpc_net_read(conn->fd, conn->rcv_buf->last, 
-                         conn->rcv_buf->end - conn->rcv_buf->last);
+        n = read(conn->fd, conn->rcv_buf->last, 
+                 conn->rcv_buf->end - conn->rcv_buf->last);
         if (n < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+
             if (errno == EAGAIN) {
-                n = 0;
                 break;
             }
+
             return -1;
         }
 
         if (n == 0) {
             conn->eof = 1;
-            return 0;
+            break;
         }
 
-        conn->rcv_bytes += n;
         conn->rcv_buf->last += n;
+        sum += n;
 
         if (conn->rcv_buf->end == conn->rcv_buf->last) {
             mpc_buf = mpc_buf_get();
@@ -140,7 +145,8 @@ mpc_conn_recv(mpc_conn_t *conn)
         }
     }
 
-    return n;
+    conn->rcv_bytes += sum;
+    return sum;
 }
 
 
@@ -171,18 +177,24 @@ mpc_conn_reset(mpc_conn_t *conn)
 int
 mpc_conn_send(mpc_conn_t *conn)
 {
-    int          n;
+    int          n, sum;
 
     ASSERT(conn->snd_buf == STAILQ_FIRST(&conn->snd_buf_queue));
 
+    sum = 0;
     for (;;) {
-        n = mpc_net_write(conn->fd, conn->snd_buf->pos, 
-                          conn->snd_buf->last - conn->snd_buf->pos);
+        n = write(conn->fd, conn->snd_buf->pos, 
+                  conn->snd_buf->last - conn->snd_buf->pos);
         if (n < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+
             if (errno == EAGAIN) {
                 n = 0;
                 break;
             }
+
             return -1;
         }
 
@@ -190,8 +202,8 @@ mpc_conn_send(mpc_conn_t *conn)
             return 0;
         }
 
+        sum += n;
         conn->snd_buf->pos += n;
-        conn->snd_bytes += n;
 
         if (conn->snd_buf->pos == conn->snd_buf->last) {
             STAILQ_REMOVE_HEAD(&conn->snd_buf_queue, next);
@@ -206,5 +218,6 @@ mpc_conn_send(mpc_conn_t *conn)
         }
     }
 
-    return n;
+    conn->snd_bytes += n;
+    return sum;
 }

@@ -35,6 +35,12 @@
 #include <limits.h>
 
 
+#define MPC_INT32_LEN   sizeof("-2147483648") - 1
+#define MPC_INT64_LEN   sizeof("-9223372036854775808") - 1
+
+#define MPC_MAX_INT32_VALUE     (uint32_t)0x7fffffff
+#define MPC_MAX_UINT32_VALUE    (uint32_t)0xffffffff
+
 /* True if negative values of the signed integer type T uses two's
  * complement, one's complement, or signed magnitude representation,
  * respectively. */
@@ -55,13 +61,13 @@
         : ~ TYPE_MAXIMUM(t)))
 #define BILLION         (1000 * 1000 * 1000)
 
-#define mpc_atoi(l, n)      _mpc_atoi((uint8_t *)(l), (size_t)(n))
-
 
 int mpc_nanosleep(double seconds);
 void mpc_add_milliseconds_to_now(int64_t ms_delta, int64_t *sec, int64_t *ms);
 void mpc_get_time(int64_t *seconds, int64_t *milliseconds);
-int _mpc_atoi(uint8_t *line, size_t n);
+int mpc_atoi(uint8_t *line, size_t n);
+int mpc_hextoi(uint8_t *line, size_t n);
+uint8_t *mpc_hex_dump(uint8_t *dst, uint8_t *src, size_t len);
 
 
 #endif /* __MPC_UTIL_H_INCLUDED__ */

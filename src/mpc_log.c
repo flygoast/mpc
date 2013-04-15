@@ -33,8 +33,20 @@
 
 static mpc_logger_t     mpc_logger;
 
-static void mpc_log_internal(const char *file, int line, int panic, 
-    const char *fmt, ...);
+
+static uint8_t *mpc_log_errno(uint8_t *buf, uint8_t *last, int err);
+
+
+static mpc_str_t err_levels[] = {
+    mpc_string("emerg"),
+    mpc_string("alert"),
+    mpc_string("crit"),
+    mpc_string("error"),
+    mpc_string("warn"),
+    mpc_string("notice"),
+    mpc_string("info"),
+    mpc_string("debug")
+};
 
 
 int
@@ -49,7 +61,7 @@ mpc_log_init(int level, char *name)
     } else {
         l->fd = open(name, O_WRONLY|O_APPEND|O_CREAT, 0644);
         if (l->fd < 0) {
-            mpc_log_stderr("opening log file '%s' failed: %s", name,
+            mpc_log_stderr(errno, "opening log file '%s' failed: %s", name,
                            strerror(errno));
             return -1;
         }
@@ -76,12 +88,13 @@ void
 mpc_log_reopen(void)
 {
     mpc_logger_t *l = &mpc_logger;
+
     if (l->fd != STDERR_FILENO) {
         close(l->fd);
         l->fd = open(l->name, O_WRONLY|O_APPEND|O_CREAT, 0644);
         if (l->fd < 0) {
-            mpc_log_stderr("reopening log file '%s' failed, ignored: %s",
-                           l->name, strerror(errno));
+            mpc_log_stderr(errno, "reopening log file '%s' failed, ignored",
+                           l->name);
         }
     }
 }
@@ -94,7 +107,6 @@ mpc_log_level_up(void)
 
     if (l->level < MPC_LOG_DEBUG) {
         l->level++;
-        mpc_loga("up log level to %d", l->level);
     }
 }
 
@@ -106,7 +118,6 @@ mpc_log_level_down(void)
 
     if (l->level > MPC_LOG_EMERG) {
         l->level--;
-        mpc_loga("set log level to %d", l->level);
     }
 }
 
@@ -117,77 +128,110 @@ mpc_log_level_set(int level)
     mpc_logger_t *l = &mpc_logger;
 
     l->level = MPC_MAX(MPC_LOG_EMERG, MPC_MIN(level, MPC_LOG_DEBUG));
-    mpc_loga("set log level to %d", l->level);
 }
 
 
-static void
-mpc_log_internal(const char *file, int line, int panic, const char *fmt, ...)
+void
+mpc_log_core(const char *file, int line, int level, int err, 
+    const char *fmt, ...)
 {
     mpc_logger_t    *l = &mpc_logger;
-    int              len, size, errno_save;
-    char             buf[MPC_LOG_MAX_LEN], *timestr;
+    uint8_t          errstr[MPC_LOG_MAX_LEN], *timestr;
+    uint8_t         *p, *last;
     va_list          args;
     struct tm       *local;
     time_t           t;
     ssize_t          n;
 
-    if (l->fd < 0) {
+    if (l->fd < 0 || level > l->level) {
         return;
     }
 
-    errno_save = errno;
-    len = 0;                    /* length of output buffer */
-    size = MPC_LOG_MAX_LEN;     /* size of output buffer */
+    last = errstr + MPC_LOG_MAX_LEN;
+    p = errstr;
 
     t = time(NULL);
     local = localtime(&t);
-    timestr = asctime(local);
+    timestr = (uint8_t *)asctime(local);
 
-    len += snprintf(buf + len, size - len, "[%.*s] %s:%d ",
-                    (int)(strlen(timestr) - 1), timestr, file, line);
+    p = mpc_slprintf(p, last, "[%.*s] %s:%d [%V]",
+                     (int)(mpc_strlen(timestr) - 1), timestr, file, line, 
+                     &err_levels[level]);
+
     va_start(args, fmt);
-    len += vsnprintf(buf + len, size - len, fmt, args);
+    p = mpc_slprintf(p, last, fmt, args);
     va_end(args);
 
-    buf[len++] = '\n';
-
-    n = write(l->fd, buf, len);
-    if (n < 0) {
-        l->nerror++;
+    if (err) {
+        p = mpc_log_errno(p, last, err);
     }
 
-    errno = errno_save;
+    if (p > last - 1) {
+        p = last - 1;
+    }
 
-    if (panic) {
-        abort();
+    *p++ = LF;
+
+    n = write(l->fd, errstr, last - p);
+    if (n < 0) {
+        l->nerror++;
     }
 }
 
 
+static uint8_t *
+mpc_log_errno(uint8_t *buf, uint8_t *last, int err)
+{
+    if (buf > last - 50) {
+
+        /* leave a space for an error code */
+
+        buf = last - 50;
+        *buf++ = '.';
+        *buf++ = '.';
+        *buf++ = '.';
+    }
+
+    buf = mpc_slprintf(buf, last, " (%d: %s", err, strerror(err));
+
+    if (buf < last) {
+        *buf++ = ')';
+    }
+
+    return buf;
+}
+
+
 void
-mpc_log_stderr(const char *fmt, ...)
+mpc_log_stderr(int err, const char *fmt, ...)
 {
     mpc_logger_t   *l = &mpc_logger;
-    int             len, size, errno_save;
-    char            buf[4 * MPC_LOG_MAX_LEN];
+    uint8_t         errstr[MPC_LOG_MAX_LEN];
+    uint8_t        *p, *last;
     va_list         args;
     ssize_t         n;
 
-    errno_save = errno;
-    len = 0;                /* length of output buffer */
-    size = 4 * MPC_LOG_MAX_LEN; /* size of output buffer */
+    last = errstr + MPC_LOG_MAX_LEN;
+    p = errstr + 5;
+
+    mpc_memcpy(errstr, "mpc: ", 5);
 
     va_start(args, fmt);
-    len += vsnprintf(buf, size, fmt, args);
+    p = mpc_vslprintf(p, last, fmt, args);
     va_end(args);
 
-    buf[len++] = '\n';
+    if (err) {
+        p = mpc_log_errno(p, last, err);
+    }
 
-    n = write(STDERR_FILENO, buf, len);
+    if (p > last - 1) {
+        p = last - 1;
+    }
+
+    *p++ = LF;
+
+    n = write(STDERR_FILENO, errstr, p - errstr);
     if (n < 0) {
         l->nerror++;
     }
-
-    errno = errno_save;
 }

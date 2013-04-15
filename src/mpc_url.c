@@ -33,6 +33,8 @@
 
 static uint32_t         mpc_url_nfree;          /* # free mpc_url_t */
 static mpc_url_hdr_t    mpc_url_free_queue;     /* free mpc_url_t queue */
+static uint32_t         mpc_url_max_nfree;      /* max # free mpc_url_t */
+
 static uint32_t         mpc_url_ntask;
 static mpc_url_hdr_t    mpc_url_task_queue;
 
@@ -118,11 +120,13 @@ mpc_url_get(void)
         goto done;
     }
 
-    mpc_url = (mpc_url_t *)mpc_calloc(sizeof(mpc_url_t), 1);
+    mpc_url = (mpc_url_t *)mpc_calloc(sizeof(mpc_url_t) + MPC_URL_BUF_SIZE, 1);
     if (mpc_url == NULL) {
         return NULL;
     }
     SET_MAGIC(mpc_url, MPC_URL_MAGIC);
+    mpc_url->buf = (uint8_t *)mpc_url + sizeof(mpc_url_t);
+    mpc_url->buf_size = MPC_URL_BUF_SIZE;
 
 done:
     STAILQ_NEXT(mpc_url, next) = NULL;
@@ -138,6 +142,7 @@ mpc_url_free(mpc_url_t *mpc_url)
     ASSERT(STAILQ_NEXT(mpc_url, next) == NULL);
     ASSERT(mpc_url->magic == MPC_URL_MAGIC);
 
+    mpc_url->buf_size = 0;
     mpc_free(mpc_url);
 }
 
@@ -150,8 +155,13 @@ mpc_url_put(mpc_url_t *mpc_url)
     ASSERT(STAILQ_NEXT(mpc_url, next) == NULL);
     ASSERT(mpc_url->magic == MPC_URL_MAGIC);
 
-    mpc_url_nfree++;
-    STAILQ_INSERT_HEAD(&mpc_url_free_queue, mpc_url, next);
+    if (mpc_url_nfree + 1 > mpc_url_max_nfree) {
+        mpc_url_free(mpc_url);
+        
+    } else {
+        mpc_url_nfree++;
+        STAILQ_INSERT_HEAD(&mpc_url_free_queue, mpc_url, next);
+    }
 
     pthread_mutex_unlock(&mutex_free);
 }
@@ -166,10 +176,11 @@ mpc_url_remove(mpc_url_hdr_t *mpc_url_hdr, mpc_url_t *mpc_url)
 
 
 void
-mpc_url_init(void)
+mpc_url_init(uint32_t max_nfree)
 {
     mpc_url_nfree = 0;
     STAILQ_INIT(&mpc_url_free_queue);
+    mpc_url_max_nfree = max_nfree;
     mpc_url_ntask = 0;
     STAILQ_INIT(&mpc_url_task_queue);
 }

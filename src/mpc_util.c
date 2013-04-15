@@ -119,7 +119,7 @@ mpc_add_milliseconds_to_now(int64_t milliseconds,
 
 
 int 
-_mpc_atoi(uint8_t *line, size_t n)
+mpc_atoi(uint8_t *line, size_t n)
 {
     int value;
 
@@ -140,4 +140,55 @@ _mpc_atoi(uint8_t *line, size_t n)
     }
 
     return value;
+}
+
+
+int
+mpc_hextoi(uint8_t *line, size_t n)
+{
+    uint8_t     c, ch;
+    int         value;
+
+    if (n == 0) {
+        return MPC_ERROR;
+    }
+
+    for (value = 0; n--; line++) {
+        ch = *line;
+
+        if (ch >= '0' && ch <= '9') {
+            value = value * 16 + (ch - '0');
+            continue;
+        }
+
+        c = (uint8_t) (ch | 0x20);
+
+        if (c >= 'a' && c <= 'f') {
+            value = value * 16 + (c - 'a' + 10);
+            continue;
+        }
+
+        return MPC_ERROR;
+    }
+
+    if (value < 0) {
+        return MPC_ERROR;
+
+    } else {
+        return value;
+    }
+}
+
+
+uint8_t *
+mpc_hex_dump(uint8_t *dst, uint8_t *src, size_t len)
+{
+    static uint8_t  hex[] = "0123456789abcdef";
+
+    while (len--) {
+        *dst++ = hex[*src >> 4];
+        *dst++ = hex[*src++ & 0xf];
+    }
+
+    return dst;
 }

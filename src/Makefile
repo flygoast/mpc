@@ -6,6 +6,7 @@ LIB = -lpthread -lcares
 OO = mpc.o 				\
 	 mpc_core.o			\
 	 mpc_util.o 		\
+	 mpc_string.o 		\
 	 mpc_log.o 			\
 	 mpc_array.o 		\
 	 mpc_event.o 		\

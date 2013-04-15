@@ -32,10 +32,6 @@
 #define __MPC_LOG_H_INCLUDED__
 
 
-#include <stdarg.h>
-#include <time.h>
-
-
 typedef struct {
     char    *name;      /* log file name */
     int      level;     /* log level */
@@ -44,24 +40,55 @@ typedef struct {
 } mpc_logger_t;
 
 
-#define MPC_LOG_EMERG       0       /* system in unusable */
-#define MPC_LOG_ALERT       1       /* action must be taken immediately */
-#define MPC_LOG_CRIT        2       /* critical conditions */
-#define MPC_LOG_ERR         3       /* error condition */
-#define MPC_LOG_WARN        4       /* warning conditions */
-#define MPC_LOG_NOTICE      5       /* normal buf significant condition
-                                     * (default) */
-#define MPC_LOG_INFO        6       /* informational */
-#define MPC_LOG_DEBUG       7       /* debug messages */
+#define MPC_LOG_EMERG       0  /* system in unusable */
+#define MPC_LOG_ALERT       1  /* action must be taken immediately */
+#define MPC_LOG_CRIT        2  /* critical conditions */
+#define MPC_LOG_ERR         3  /* error condition */
+#define MPC_LOG_WARN        4  /* warning conditions */
+#define MPC_LOG_NOTICE      5  /* normal buf significant condition (default) */
+#define MPC_LOG_INFO        6  /* informational */
+#define MPC_LOG_DEBUG       7  /* debug messages */
 
 #define MPC_LOG_MAX_LEN     2048    /* max length of log message */
 
-#define mpc_loga(...) do {                                  \
-    mpc_log_internal(__FILE__, __LINE__, 0, __VA_ARGS__);   \
+#define mpc_log_emerg(...) do {                                          \
+    mpc_log_core(__FILE__, __LINE__, MPC_LOG_EMERG, __VA_ARGS__);        \
+} while (0)
+
+#define mpc_log_alert(...) do {                                          \
+    mpc_log_core(__FILE__, __LINE__, MPC_LOG_ALERT, __VA_ARGS__);        \
+} while (0)
+
+#define mpc_log_crit(...) do {                                           \
+    mpc_log_core(__FILE__, __LINE__, MPC_LOG_CRIT, __VA_ARGS__);         \
+} while (0)
+
+#define mpc_log_err(...) do {                                            \
+    mpc_log_core(__FILE__, __LINE__, MPC_LOG_ERR, __VA_ARGS__);          \
+} while (0)
+
+#define mpc_log_warn(...) do {                                           \
+    mpc_log_core(__FILE__, __LINE__, MPC_LOG_WARN, __VA_ARGS__);         \
+} while (0)
+
+#define mpc_log_info(...) do {                                           \
+    mpc_log_core(__FILE__, __LINE__, MPC_LOG_INFO,  __VA_ARGS__);        \
+} while (0)
+
+#define mpc_log_debug(...) do {                                          \
+    mpc_log_core(__FILE__, __LINE__, MPC_LOG_DEBUG,  __VA_ARGS__);       \
 } while (0)
 
 
-void mpc_log_stderr(const char *fmt, ...);
+int mpc_log_init(int level, char *name);
+void mpc_log_deinit(void);
+void mpc_log_reopen(void);
+void mpc_log_level_up(void);
+void mpc_log_level_down(void);
+void mpc_log_level_set(int level);
+void mpc_log_core(const char *file, int line, int level, int err, 
+    const char *fmt, ...);
+void mpc_log_stderr(int err, const char *fmt, ...);
 
 
 #endif /* __MPC_LOG_H_INCLUDED__ */

@@ -32,9 +32,12 @@
 #define __MPC_CORE_H_INCLUDED__
 
 
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdarg.h>
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
@@ -43,14 +46,15 @@
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/resource.h>
 #include <sched.h>
 #include <pthread.h>
 #include <mpc_queue.h>
 #include <mpc_string.h>
+#include <mpc_log.h>
 #include <mpc_array.h>
 #include <mpc_alloc.h>
 #include <mpc_util.h>
-#include <mpc_log.h>
 #include <mpc_event.h>
 #include <mpc_net.h>
 #include <mpc_url.h>
@@ -84,6 +88,8 @@
 #define MPC_MIN(a, b)           ((a > b) ? (b) : (a))
 
 #define MPC_CONF_BUF_MAX_SIZE   1024
+#define MPC_CRON_INTERVAL       50  /* miliseconds */
+
 
 #ifdef WITH_DEBUG
 #define ASSERT(x)               assert(x)  
@@ -95,10 +101,14 @@
 
 
 typedef struct {
-    char    *conf_filename;
-    char    *input_filename;
-    char    *addr;
-    int      port;
+    char                *conf_filename;
+    char                *input_filename;
+    char                *addr;
+    int                  port;
+    int                  log_level;
+    char                *log_file;
+    mpc_event_loop_t    *el;
+    int                  self_pipe[2];
 } mpc_instance_t;
 
 

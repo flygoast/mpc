@@ -32,7 +32,9 @@
 #define __MPC_URL_H_INCLUDED__
 
 
-#define MPC_URL_MAGIC   0x4d55524c  /* "MURL" */
+#define MPC_URL_MAGIC           0x4d55524c  /* "MURL" */
+#define MPC_URL_BUF_SIZE        1024
+#define MPC_URL_MAX_NFREE       128
 
 
 typedef struct mpc_url_s mpc_url_t;
@@ -58,7 +60,7 @@ STAILQ_HEAD(mpc_url_hdr_s, mpc_url_s);
 
 mpc_url_t *mpc_url_get(void);
 void mpc_url_put(mpc_url_t *mpc_url);
-void mpc_url_init(void);
+void mpc_url_init(uint32_t max_nfree);
 void mpc_url_deinit(void);
 mpc_url_t *mpc_url_task_get(void);
 void mpc_url_task_insert(mpc_url_t *mpc_url);
