@@ -38,6 +38,8 @@
 #define MPC_HTTP_PARSE_HEADERS          2
 #define MPC_HTTP_PARSE_BODY             3
 
+#define MPC_HTTP_MAX_REDIRECT           10
+
 
 typedef struct mpc_http_s mpc_http_t;
 typedef struct mpc_http_hdr_s mpc_http_hdr_t;
@@ -66,6 +68,7 @@ struct mpc_http_s {
     mpc_conn_t              *conn;
     mpc_url_t               *url;
     int                      phase;
+    mpc_array_t             *locations;
     int                      http_major;
     int                      http_minor;
     mpc_buf_t               *buf;
@@ -79,6 +82,7 @@ struct mpc_http_s {
     uint8_t                 *header_end;
     int                      content_length_n;
     int                      content_length_received;
+    unsigned                 need_redirect:1;
 };
 
 

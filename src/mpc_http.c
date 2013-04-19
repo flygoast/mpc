@@ -54,6 +54,7 @@ static int mpc_http_parse_body(mpc_http_t *http);
 static int mpc_http_create_request(char *addr, mpc_event_loop_t *el,
     mpc_url_t *mpc_url);
 static int mpc_http_log_headers(void *elem, void *data);
+static int mpc_http_release_url(void *elem, void *data);
 
 
 void
@@ -66,6 +67,7 @@ mpc_http_reset(mpc_http_t *http)
     http->http_minor = 0;
     http->buf = NULL;
     http->phase = MPC_HTTP_SEND_REQUEST;
+    http->locations = NULL;
 
     mpc_memzero(&http->status, sizeof(http->status));
 
@@ -78,6 +80,7 @@ mpc_http_reset(mpc_http_t *http)
     http->header_end = NULL;
     http->content_length_n = 0;
     http->content_length_received = 0;
+    http->need_redirect = 0;
 }
 
 
@@ -447,7 +450,6 @@ mpc_http_release(mpc_http_t *http)
     }
 
     if (http->conn != NULL) {
-        /* TODO */
         mpc_conn_release(http->conn);
         http->conn = NULL;
     }
@@ -455,6 +457,10 @@ mpc_http_release(mpc_http_t *http)
     if (http->headers != NULL) {
         mpc_array_destroy(http->headers);
         http->headers = NULL;
+    }
+
+    if (http->locations != NULL) {
+        mpc_array_each(http->locations, mpc_http_release_url, http);
     }
 
     mpc_http_put(http);
@@ -605,6 +611,14 @@ parse_body:
         return;
     }
 
+#if 0
+    if (http->need_redirect) {
+        new_url = *(mpc_url_t **)mpc_array_top(http->locations);
+        mpc_log_debug(0, "redirect to \"http://%V%V\"", 
+                      &new_url->host, &new_url->uri);
+    }
+#endif
+
     if (conn->eof) {
         mpc_log_debug(0, "request over server close connection,"
                          " host: \"%V\" uri: \"%V\"",
@@ -620,6 +634,16 @@ parse_body:
     mpc_delete_file_event(el, fd, MPC_READABLE);
     mpc_http_release(http);
     return;
+}
+
+
+static int
+mpc_http_release_url(void *elem, void *data)
+{
+    mpc_url_t  *mpc_url = *(mpc_url_t **)elem;
+
+    mpc_url_put(mpc_url);
+    return MPC_OK;
 }
 
 
@@ -1099,7 +1123,9 @@ static int
 mpc_http_parse_headers(mpc_http_t *http)
 {
     int                  rc;
+    uint8_t             *p, *last;
     mpc_http_header_t   *header;
+    mpc_url_t          **url;
 
     for (;;) {
 
@@ -1124,7 +1150,6 @@ mpc_http_parse_headers(mpc_http_t *http)
             header->value.data = http->header_start;
             header->value.len = http->header_end - http->header_start;
 
-            /* ugly code */
             if (header->name.len == sizeof("Content-Length") - 1
                 && mpc_strncasecmp(header->name.data, 
                                    (uint8_t *)"Content-Length",
@@ -1135,6 +1160,55 @@ mpc_http_parse_headers(mpc_http_t *http)
                 if (http->content_length_n == MPC_ERROR) {
                     return MPC_ERROR;
                 }
+            }
+
+            if (header->name.len == sizeof("Location") - 1
+                && mpc_strncasecmp(header->name.data, (uint8_t *)"Location",
+                                   sizeof("Location") - 1) == 0)
+            {
+                if (http->locations == NULL) {
+                    http->locations = mpc_array_create(4, sizeof(mpc_url_t *));
+                    if (http->locations == NULL) {
+                        return MPC_ERROR;
+                    }
+                }
+
+                if (http->locations->nelem > MPC_HTTP_MAX_REDIRECT) {
+                    mpc_log_err(0, "http beyond max redirect(%d),"
+                                   " main url(%ud)",
+                                   MPC_HTTP_MAX_REDIRECT, http->url->url_id);
+                    return MPC_ERROR;
+                }
+
+                url = mpc_array_push(http->locations);
+                if (url == NULL) {
+                    return MPC_ERROR;
+                }
+
+                *url = mpc_url_get();
+                if (*url == NULL) {
+                    return MPC_ERROR;
+                }
+
+                last = (*url)->buf + (*url)->buf_size;
+
+                p = mpc_slprintf((*url)->buf, last, "%V", &header->value);
+
+                if (p == last) {
+                    mpc_log_err(0, "url buf size (%d) too small for \"%V\"",
+                                (*url)->buf_size, &header->value);
+                    return MPC_ERROR;
+                }
+
+                if (mpc_http_parse_url((*url)->buf, header->value.len, *url)
+                    != MPC_OK)
+                {
+                    mpc_log_err(0, "parse http url \"%V\" failed", 
+                                &header->value);
+                    return MPC_ERROR;
+                }
+
+                http->need_redirect = 1;
             }
 
             continue; 
