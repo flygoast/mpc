@@ -32,7 +32,11 @@
 #define __MPC_HTTP_H_INCLUDED__
 
 
-#define MPC_HTTP_MAGIC      0x48545450  /* "HTTP" */
+#define MPC_HTTP_MAGIC                  0x48545450  /* "HTTP" */
+#define MPC_HTTP_SEND_REQUEST           0
+#define MPC_HTTP_PARSE_STATUS_LINE      1
+#define MPC_HTTP_PARSE_HEADERS          2
+#define MPC_HTTP_PARSE_BODY             3
 
 
 typedef struct mpc_http_s mpc_http_t;
@@ -60,6 +64,8 @@ struct mpc_http_s {
 #endif
     TAILQ_ENTRY(mpc_http_s)  next;
     mpc_conn_t              *conn;
+    mpc_url_t               *url;
+    int                      phase;
     int                      http_major;
     int                      http_minor;
     mpc_buf_t               *buf;
@@ -79,9 +85,9 @@ struct mpc_http_s {
 TAILQ_HEAD(mpc_http_hdr_s, mpc_http_s);
 
 
+void mpc_http_init();
+void mpc_http_deinit();
 int mpc_http_parse_url(uint8_t *url, size_t n, mpc_url_t *mpc_url);
-int mpc_http_process_url(mpc_event_loop_t *el, mpc_url_t *mpc_url);
-int mpc_http_request(char *addr, mpc_event_loop_t *el, mpc_url_t *mpc_url);
-
+int mpc_http_process_url(mpc_instance_t *ins, mpc_url_t *mpc_url);
 
 #endif /* __MPC_HTTP_H_INCLUDED__ */

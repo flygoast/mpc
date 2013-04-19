@@ -36,7 +36,7 @@ mpc_array_create(uint32_t n, size_t size)
 {
     mpc_array_t  *a;
 
-    a = mpc_alloc(sizeof(a));
+    a = mpc_alloc(sizeof(mpc_array_t));
     if (a == NULL) {
         return NULL;
     }

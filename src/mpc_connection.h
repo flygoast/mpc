@@ -70,6 +70,7 @@ void mpc_conn_init(void);
 void mpc_conn_deinit(void);
 int mpc_conn_recv(mpc_conn_t *conn);
 int mpc_conn_send(mpc_conn_t *conn);
+void mpc_conn_release(mpc_conn_t *conn);
 
 
 #endif /* __MPC_CONNECTION_H_INCLUDED__ */

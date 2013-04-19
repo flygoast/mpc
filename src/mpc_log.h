@@ -86,6 +86,7 @@ void mpc_log_reopen(void);
 void mpc_log_level_up(void);
 void mpc_log_level_down(void);
 void mpc_log_level_set(int level);
+int mpc_log_get_level(char *log_level);
 void mpc_log_core(const char *file, int line, int level, int err, 
     const char *fmt, ...);
 void mpc_log_stderr(int err, const char *fmt, ...);

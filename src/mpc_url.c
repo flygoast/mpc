@@ -81,7 +81,9 @@ mpc_url_task_get(void)
         STAILQ_REMOVE_HEAD(&mpc_url_task_queue, next);
         ASSERT(mpc_url->magic == MPC_URL_MAGIC);
         STAILQ_NEXT(mpc_url, next) = NULL;
-
+        mpc_log_debug(0, "get task url(%d), total %d, host: \"%V\" uri: \"%V\"",
+                      mpc_url->url_id, mpc_url_ntask,
+                      &mpc_url->host, &mpc_url->uri);
         pthread_mutex_unlock(&mutex_task);
 
         return mpc_url;
@@ -100,6 +102,9 @@ mpc_url_task_insert(mpc_url_t *mpc_url)
 
     STAILQ_INSERT_TAIL(&mpc_url_task_queue, mpc_url, next);
     mpc_url_ntask++;
+    mpc_log_debug(0, "insert task url(%d), total %d, host: \"%V\" uri: \"%V\"",
+                  mpc_url->url_id, mpc_url_ntask, 
+                  &mpc_url->host, &mpc_url->uri);
 
     pthread_mutex_unlock(&mutex_task);
 }
@@ -109,6 +114,7 @@ mpc_url_t *
 mpc_url_get(void)
 {
     mpc_url_t  *mpc_url;
+    uint8_t    *buf;
 
     pthread_mutex_lock(&mutex_free);
 
@@ -120,18 +126,22 @@ mpc_url_get(void)
         goto done;
     }
 
-    mpc_url = (mpc_url_t *)mpc_calloc(sizeof(mpc_url_t) + MPC_URL_BUF_SIZE, 1);
-    if (mpc_url == NULL) {
+    buf = (uint8_t *)mpc_calloc(sizeof(mpc_url_t) + MPC_URL_BUF_SIZE, 1);
+    if (buf == NULL) {
+        pthread_mutex_unlock(&mutex_free);
         return NULL;
     }
-    SET_MAGIC(mpc_url, MPC_URL_MAGIC);
-    mpc_url->buf = (uint8_t *)mpc_url + sizeof(mpc_url_t);
+
+    mpc_url = (mpc_url_t *)(buf + MPC_URL_BUF_SIZE);
+    mpc_url->buf = buf;
     mpc_url->buf_size = MPC_URL_BUF_SIZE;
 
+    SET_MAGIC(mpc_url, MPC_URL_MAGIC);
 done:
     STAILQ_NEXT(mpc_url, next) = NULL;
 
     pthread_mutex_unlock(&mutex_free);
+
     return mpc_url;
 }
 
@@ -139,11 +149,13 @@ done:
 static void
 mpc_url_free(mpc_url_t *mpc_url)
 {
+    uint8_t  *buf;
+
     ASSERT(STAILQ_NEXT(mpc_url, next) == NULL);
     ASSERT(mpc_url->magic == MPC_URL_MAGIC);
 
-    mpc_url->buf_size = 0;
-    mpc_free(mpc_url);
+    buf = (uint8_t *)mpc_url - MPC_URL_BUF_SIZE;
+    mpc_free(buf);
 }
 
 

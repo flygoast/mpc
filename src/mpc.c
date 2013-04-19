@@ -43,6 +43,8 @@ static struct option long_options[] = {
     { "version",    no_argument,        NULL,   'v' },
     { "test",       no_argument,        NULL,   't' },
     { "daemon",     no_argument,        NULL,   'd' },
+    { "log",        required_argument,  NULL,   'l' },
+    { "level",      required_argument,  NULL,   'L' },
     { "conf",       required_argument,  NULL,   'c' },
     { "file",       required_argument,  NULL,   'f' },
     { "addr",       required_argument,  NULL,   'a' },
@@ -51,7 +53,7 @@ static struct option long_options[] = {
 };
 
 
-static char *short_options = "hvtdc:f:a:p:";
+static char *short_options = "hvtdl:L:c:f:a:p:";
 
 
 static int
@@ -90,6 +92,18 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
             ins->input_filename = optarg;
             break;
 
+        case 'l':
+            ins->log_file = optarg;
+            break;
+
+        case 'L':
+            ins->log_level = mpc_log_get_level(optarg);
+            if (ins->log_level == MPC_ERROR) {
+                mpc_log_stderr(0, "option '-L' requires a valid log level");
+                return MPC_ERROR;
+            }
+            break;
+
         case 'a':
             ins->addr = optarg;
             break;
@@ -112,10 +126,12 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
             switch (optopt) {
             case 'f':
             case 'c':
+            case 'l':
                 mpc_log_stderr(0, "option -%c requires a file name", optopt);
                 break;
 
             case 'a':
+            case 'L':
                 mpc_log_stderr(0, "option -%c requires a string", optopt);
                 break;
 

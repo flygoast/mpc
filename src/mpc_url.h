@@ -33,7 +33,7 @@
 
 
 #define MPC_URL_MAGIC           0x4d55524c  /* "MURL" */
-#define MPC_URL_BUF_SIZE        1024
+#define MPC_URL_BUF_SIZE        512
 #define MPC_URL_MAX_NFREE       128
 
 
@@ -48,6 +48,7 @@ struct mpc_url_s {
     STAILQ_ENTRY(mpc_url_s)     next;
     mpc_str_t                   host;
     mpc_str_t                   uri;
+    int                         url_id;
     int                         port;
     uint8_t                    *buf;
     uint32_t                    buf_size;

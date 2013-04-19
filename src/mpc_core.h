@@ -49,6 +49,11 @@
 #include <sys/resource.h>
 #include <sched.h>
 #include <pthread.h>
+
+
+typedef struct mpc_instance_s mpc_instance_t;
+
+
 #include <mpc_queue.h>
 #include <mpc_string.h>
 #include <mpc_log.h>
@@ -87,6 +92,7 @@
 #define MPC_MAX(a, b)           ((a < b) ? (b) : (a))
 #define MPC_MIN(a, b)           ((a > b) ? (b) : (a))
 
+#define MPC_TEMP_BUF_SIZE       512
 #define MPC_CONF_BUF_MAX_SIZE   1024
 #define MPC_CRON_INTERVAL       50  /* miliseconds */
 
@@ -100,7 +106,7 @@
 #endif
 
 
-typedef struct {
+struct mpc_instance_s {
     char                *conf_filename;
     char                *input_filename;
     char                *addr;
@@ -109,7 +115,7 @@ typedef struct {
     char                *log_file;
     mpc_event_loop_t    *el;
     int                  self_pipe[2];
-} mpc_instance_t;
+};
 
 
 int mpc_core_init(mpc_instance_t *ins);

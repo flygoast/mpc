@@ -45,7 +45,8 @@ static mpc_str_t err_levels[] = {
     mpc_string("warn"),
     mpc_string("notice"),
     mpc_string("info"),
-    mpc_string("debug")
+    mpc_string("debug"),
+    mpc_null_string,
 };
 
 
@@ -131,15 +132,39 @@ mpc_log_level_set(int level)
 }
 
 
+int
+mpc_log_get_level(char *log_level)
+{
+    mpc_str_t  *str;
+    int         i, len; 
+
+    len = strlen(log_level);
+
+    for (str = err_levels, i = 0; str->len; str++, i++) {
+        if (str->len != len) {
+            continue;
+        }
+
+        if (mpc_strncasecmp(str->data, (uint8_t *)log_level, len) != 0) {
+            continue;
+        }
+
+        return i;
+    }
+
+    return MPC_ERROR;
+}
+
+
 void
 mpc_log_core(const char *file, int line, int level, int err, 
     const char *fmt, ...)
 {
     mpc_logger_t    *l = &mpc_logger;
-    uint8_t          errstr[MPC_LOG_MAX_LEN], *timestr;
+    uint8_t          errstr[MPC_LOG_MAX_LEN];
     uint8_t         *p, *last;
     va_list          args;
-    struct tm       *local;
+    struct tm        local;
     time_t           t;
     ssize_t          n;
 
@@ -150,16 +175,17 @@ mpc_log_core(const char *file, int line, int level, int err,
     last = errstr + MPC_LOG_MAX_LEN;
     p = errstr;
 
-    t = time(NULL);
-    local = localtime(&t);
-    timestr = (uint8_t *)asctime(local);
+    *p++ = '[';
 
-    p = mpc_slprintf(p, last, "[%.*s] %s:%d [%V]",
-                     (int)(mpc_strlen(timestr) - 1), timestr, file, line, 
-                     &err_levels[level]);
+    t = time(NULL);
+    localtime_r(&t, &local);
+    asctime_r(&local, (char *)p);
+    p += 24;
+
+    p = mpc_slprintf(p, last, "] %s:%d [%V] ", file, line, &err_levels[level]);
 
     va_start(args, fmt);
-    p = mpc_slprintf(p, last, fmt, args);
+    p = mpc_vslprintf(p, last, fmt, args);
     va_end(args);
 
     if (err) {
@@ -172,7 +198,7 @@ mpc_log_core(const char *file, int line, int level, int err,
 
     *p++ = LF;
 
-    n = write(l->fd, errstr, last - p);
+    n = write(l->fd, errstr, p - errstr);
     if (n < 0) {
         l->nerror++;
     }

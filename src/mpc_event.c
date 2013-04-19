@@ -80,7 +80,7 @@ mpc_create_event_loop(int setsize)
     el->time_event_head = NULL;
     el->time_event_next_id = 0;
     el->stop = 0;
-    el->exit_code = 0;
+    el->exit_code = MPC_OK;
     el->maxfd = -1;
     el->before_sleep_ptr = NULL;
     if (mpc_event_api_create(el) == -1) {

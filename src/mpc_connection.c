@@ -124,6 +124,7 @@ mpc_conn_recv(mpc_conn_t *conn)
             }
 
             if (errno == EAGAIN) {
+                n = 0;
                 break;
             }
 
@@ -177,9 +178,7 @@ mpc_conn_reset(mpc_conn_t *conn)
 int
 mpc_conn_send(mpc_conn_t *conn)
 {
-    int          n, sum;
-
-    ASSERT(conn->snd_buf == STAILQ_FIRST(&conn->snd_buf_queue));
+    int  n, sum;
 
     sum = 0;
     for (;;) {
@@ -199,25 +198,44 @@ mpc_conn_send(mpc_conn_t *conn)
         }
 
         if (n == 0) {
-            return 0;
+            break;
         }
 
         sum += n;
         conn->snd_buf->pos += n;
 
         if (conn->snd_buf->pos == conn->snd_buf->last) {
-            STAILQ_REMOVE_HEAD(&conn->snd_buf_queue, next);
-            mpc_buf_put(conn->snd_buf);
-            if (STAILQ_EMPTY(&conn->snd_buf_queue)) {
-                conn->snd_buf = NULL;
+            conn->snd_buf = STAILQ_NEXT(conn->snd_buf, next);
+            if (conn->snd_buf == NULL) {
                 conn->done = 1;
                 break;
-            } else {
-                conn->snd_buf = STAILQ_FIRST(&conn->snd_buf_queue);
             }
         }
     }
 
-    conn->snd_bytes += n;
+    conn->snd_bytes += sum;
     return sum;
+}
+
+
+void
+mpc_conn_release(mpc_conn_t *conn)
+{
+     mpc_buf_t *buf, *nbuf;   /* current and next buf */
+
+    for (buf = STAILQ_FIRST(&conn->rcv_buf_queue); buf != NULL; buf = nbuf) {
+        nbuf = STAILQ_NEXT(buf, next);
+        mpc_buf_put(buf);
+    }
+
+    for (buf = STAILQ_FIRST(&conn->snd_buf_queue); buf != NULL; buf = nbuf) {
+        nbuf = STAILQ_NEXT(buf, next);
+        mpc_buf_put(buf);
+    }
+
+    if (conn->fd != -1) {
+        close(conn->fd);
+    }
+
+    mpc_conn_put(conn);
 }

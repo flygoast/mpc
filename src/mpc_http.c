@@ -34,35 +34,50 @@
 #define MPC_HTTP_HEADER_DONE    -3
 
 
+static int              mpc_url_id;
 static uint32_t         mpc_http_nfree;
 static mpc_http_hdr_t   mpc_http_free_queue;
 
 
+#ifdef WITH_MPC_RESOLVER
 static void mpc_http_gethostbyname_cb(mpc_event_loop_t *el, int status,
     struct hostent *host, void *arg);
-static void mpc_http_connect_handler(mpc_event_loop_t *el, int fd, void *data,
+#endif
+
+static void mpc_http_process_connect(mpc_event_loop_t *el, int fd, void *data,
     int mask);
-static void mpc_http_request_snd_handler(mpc_event_loop_t *el, int fd,
-    void *data, int mask);
+static void mpc_http_process_response(mpc_event_loop_t *el, int fd, void *data,
+    int mask);
 static int mpc_http_parse_status_line(mpc_http_t *http);
-static int mpc_http_process_body(mpc_http_t *http);
-static int mpc_http_process_headers(mpc_http_t *http);
-static void mpc_http_process_headers_handler(mpc_event_loop_t *el, int fd,
-    void *data, int mask);
-static void mpc_http_process_status_line(mpc_event_loop_t *el, int fd,
-    void *data, int mask);
+static int mpc_http_parse_headers(mpc_http_t *http);
+static int mpc_http_parse_body(mpc_http_t *http);
+static int mpc_http_create_request(char *addr, mpc_event_loop_t *el,
+    mpc_url_t *mpc_url);
+static int mpc_http_log_headers(void *elem, void *data);
 
 
 void
 mpc_http_reset(mpc_http_t *http)
 {
     ASSERT(http->magic == MPC_HTTP_MAGIC);
-    http->state = 0;
     http->conn = NULL;
+    http->url = NULL;
     http->http_major = 0;
     http->http_minor = 0;
     http->buf = NULL;
-    memset(&http->status, 0, sizeof(http->status));
+    http->phase = MPC_HTTP_SEND_REQUEST;
+
+    mpc_memzero(&http->status, sizeof(http->status));
+
+    http->state = 0;
+    http->headers = NULL;
+    http->invalid_header = 0;
+    http->header_name_start = NULL;
+    http->header_name_end = NULL;
+    http->header_start = NULL;
+    http->header_end = NULL;
+    http->content_length_n = 0;
+    http->content_length_received = 0;
 }
 
 
@@ -143,139 +158,232 @@ mpc_http_parse_url(uint8_t *url, size_t n, mpc_url_t *mpc_url)
     enum {
         sw_domain,
         sw_port,
-        sw_uri
+        sw_uri,
+        sw_done
     } state;
 
-    if (strncasecmp((char *)url, "http://", 7) != 0) {
+    if (mpc_strncasecmp(url, (uint8_t *)"http://", 7) != 0 || n <= 7) {
         return MPC_ERROR;
     }
 
-    mpc_url->port = 80;
+    mpc_url->url_id = mpc_url_id++;
+    mpc_url->port = 0;
+    mpc_url->host.len = 0;
+    mpc_url->uri.len = 1;
 
     url += 7;
+    n -= 7;
     state = 0;
 
     mpc_url->host.data = url;
 
     while (n--) {
         c = *url++;
-        if (c == '\0') {
-            break;
-        }
 
         switch (state) {
         case sw_domain:
             if (c == ':') {
-                mpc_url->host.len = url - 1 - mpc_url->host.data;
                 state = sw_port;
                 p = url;
                 break;
             }
 
             if (c == '/') {
-                mpc_url->host.len = url - 1 - mpc_url->host.data;
                 state = sw_uri;
-                mpc_url->uri.data = url - 1;
+                mpc_url->uri.data = url - 1; /* start from '/' */
+                mpc_url->uri.len = 1;
                 break;
             }
-            break;
+
+            if (c == '\0') {
+                state = sw_done;
+                break;
+            }
+
+            if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '.'
+                 || (c >= '0' && c <= '9'))
+            {
+                mpc_url->host.len++;
+                break;
+            }
+
+            return MPC_ERROR;
         case sw_port:
             if (c == '/') {
-                mpc_url->port = mpc_atoi(p, url - 1 - p);
-                if (mpc_url->port < 1 || mpc_url->port > UINT16_MAX) {
-                    return MPC_ERROR;
-                }
                 state = sw_uri;
-                mpc_url->uri.data = url - 1;
+                mpc_url->uri.data = url - 1; /* start from '/' */
+                mpc_url->uri.len = 1;
                 break;
             }
+
+            if (c == '\0') {
+                state = sw_done;
+                break;
+            }
+
+            if (c < '0' || c > '9') {
+                return MPC_ERROR;
+            }
+
+            mpc_url->port = mpc_url->port * 10 + c - '0';
             break;
         case sw_uri:
+            if (c == '\0') {
+                state = sw_done;
+                break;
+            }
+
+            mpc_url->uri.len++;
+            break;
+
+        case sw_done:
+            /* do nothing */
             break;
         }
     }
 
-    mpc_url->uri.len = url - 1 - mpc_url->uri.data;
     mpc_url->no_resolve = 0;
+    if (mpc_url->host.len == 0 || mpc_url->uri.len == 1) {
+        return MPC_ERROR;
+    }
+
+    if (mpc_url->port == 0) {
+        mpc_url->port = 80;
+    }
 
     return MPC_OK;
 }
 
 
 int
-mpc_http_process_url(mpc_event_loop_t *el, mpc_url_t *mpc_url)
+mpc_http_process_url(mpc_instance_t *ins, mpc_url_t *mpc_url)
 {
     if (mpc_url->no_resolve) {
-        printf("do something\n");
+        if (mpc_http_create_request((char *)mpc_url->host.data, ins->el, 
+                                    mpc_url) != MPC_OK)
+        {
+            mpc_log_err(0, "create http request \"http://%V%V\" failed",
+                        &mpc_url->host, &mpc_url->uri);
+            mpc_url_put(mpc_url);
+        }
 
     } else {
-        mpc_gethostbyname(el, mpc_http_gethostbyname_cb, mpc_url->host.data,
-                          mpc_url->host.len, AF_INET, (void *)mpc_url, NULL);
+#ifdef WITH_MPC_RESOLVER
+        mpc_gethostbyname(ins->el, mpc_http_gethostbyname_cb, 
+                          mpc_url->host.data, mpc_url->host.len,
+                          AF_INET, (void *)mpc_url, NULL);
+#else
+        mpc_log_emerg(0, "mpc not compiled with resolver." CRLF
+                         "Please recompile it with -DWITH_MPC_RESOLVER");
+        exit(1);
+#endif 
     }
 
     return MPC_OK;
 }
 
 
+#ifdef WITH_MPC_RESOLVER
 static void
 mpc_http_gethostbyname_cb(mpc_event_loop_t *el, int status,
     struct hostent *host, void *arg)
 {
+    mpc_url_t  *mpc_url = (mpc_url_t *)arg;
+
     if (status == MPC_RESOLVER_OK) {
-        if (mpc_http_request(host->h_addr, el, (mpc_url_t *)arg) != MPC_OK) {
-            mpc_log_stderr(0, "failed");
+#ifdef WITH_DEBUG
+        uint32_t addr = *(in_addr_t *)host->h_addr;
+        mpc_log_debug(0, "gethostbyname url(%d) \"%V\" %ud.%ud.%ud.%ud", 
+                      mpc_url->url_id, &mpc_url->host,
+                      addr & 0xff, (addr & 0xff00) >> 8,
+                      (addr & 0xff0000) >> 16, (addr & 0xff000000) >> 24);
+#endif
+
+        if (mpc_http_create_request(host->h_addr, el, mpc_url) != MPC_OK) {
+            mpc_log_err(0, "create http request \"http://%V%V\" failed",
+                        &mpc_url->host, &mpc_url->uri);
+            mpc_url_put(mpc_url);
         }
     } else {
-        mpc_log_stderr(0, "%s", ares_strerror(status));
+        mpc_log_err(0, "gethostbyname failed: (%d: %s)", 
+                    status, ares_strerror(status));
+        mpc_url_put(mpc_url);
     }
 }
+#endif
 
 
-int
-mpc_http_request(char *addr, mpc_event_loop_t *el, mpc_url_t *mpc_url)
+static int
+mpc_http_create_request(char *addr, mpc_event_loop_t *el, mpc_url_t *mpc_url)
 {
+    int          flags;
     int          sockfd;
-    mpc_http_t  *http;
-    mpc_conn_t  *conn;
+    uint8_t     *p, *last;
     mpc_buf_t   *rcv_buf, *snd_buf;
+    mpc_conn_t  *conn;
+    mpc_http_t  *http;
+
+    rcv_buf = NULL;
+    snd_buf = NULL;
+    conn = NULL;
+    http = NULL;
+    sockfd = -1;
 
     conn = mpc_conn_get();
     if (conn == NULL) {
-        mpc_log_stderr(0, "mpc_conn_get failed");
-        return MPC_ERROR;
+        mpc_log_emerg(0, "get conn failed, host: \"%V\" uri:\"%V\"", 
+                      &mpc_url->host, &mpc_url->uri);
+        goto failed;
     }
 
     rcv_buf = mpc_buf_get();
     if (rcv_buf == NULL) {
-        mpc_log_stderr(0, "mpc_buf_get failed");
-        return MPC_ERROR;
+        mpc_log_emerg(0, "get buf failed, host: \"%V\" uri:\"%V\"",
+                      &mpc_url->host, &mpc_url->uri);
+        goto failed;
     }
+
     mpc_buf_insert(&conn->rcv_buf_queue, rcv_buf);
     conn->rcv_buf = rcv_buf;
 
     snd_buf = mpc_buf_get();
     if (snd_buf == NULL) {
-        mpc_log_stderr(0, "mpc_buf_get failed");
-        return MPC_ERROR;
+        mpc_log_emerg(0, "get buf failed, host: \"%V\" uri:\"%V\"",
+                      &mpc_url->host, &mpc_url->uri);
+        goto failed;
     }
+
     mpc_buf_insert(&conn->snd_buf_queue, snd_buf);
     conn->snd_buf = snd_buf;
 
-    snd_buf->last += snprintf((char *)snd_buf->start, mpc_buf_size(snd_buf),
-                             "GET %.*s HTTP/1.1" CRLF
-                             "Host: %.*s" CRLF
-                             "Accept: *.*" CRLF
-                             "UserAgent: %s" CRLF
-                             "Connection: close" CRLF
-                             CRLF,
-                             (int)mpc_url->uri.len, mpc_url->uri.data,
-                             (int)mpc_url->host.len, mpc_url->host.data,
-                             MPC_VERSION);
+    ASSERT(snd_buf->pos == snd_buf->start);
+
+    last = snd_buf->end;
+    p = mpc_slprintf(snd_buf->start, last,
+                     "GET %V HTTP/1.1" CRLF
+                     "Host: %V" CRLF
+                     "Accept: *.*" CRLF
+                     "UserAgent: %s" CRLF
+                     "Connection: close" CRLF
+                     CRLF,
+                     &mpc_url->uri,
+                     &mpc_url->host,
+                     MPC_VERSION);
+    snd_buf->last = p;
+
+    mpc_log_debug(0, "create request, host: \"%V\" uri: \"%V\"", 
+                  &mpc_url->host, &mpc_url->uri);
+
+    flags = MPC_NET_NONBLOCK;
+    if (mpc_url->no_resolve) {
+        flags |= MPC_NET_NEEDATON;
+    }
 
     sockfd = mpc_net_tcp_connect(addr, mpc_url->port, MPC_NET_NONBLOCK);
     if (sockfd == MPC_ERROR) {
-        mpc_log_stderr(0, "mpc_net_tcp_connect failed");
-        return MPC_ERROR;
+        mpc_log_err(errno, "tcp connect failed, host: \"%V\" uri: \"%V\"",
+                    &mpc_url->host, &mpc_url->uri);
+        goto failed;
     }
 
     conn->connecting = 1;
@@ -283,59 +391,111 @@ mpc_http_request(char *addr, mpc_event_loop_t *el, mpc_url_t *mpc_url)
 
     http = mpc_http_get();
     if (http == NULL) {
-        mpc_log_stderr(0, "mpc_http_get failed");
-        return MPC_ERROR;
+        mpc_log_emerg(0, "get http failed, host: \"%V\" uri: \"%V\"",
+                      &mpc_url->host, &mpc_url->uri);
+        goto failed;
     }
-    http->conn = conn;
 
-    if (mpc_create_file_event(el, sockfd, MPC_WRITABLE,
-                              mpc_http_connect_handler, (void *)http)
+    http->conn = conn;
+    http->url = mpc_url;
+
+    if (mpc_create_file_event(el, sockfd, MPC_WRITABLE, 
+                              mpc_http_process_connect, (void *)http)
         == MPC_ERROR)
     {
-        close(sockfd);
-        mpc_log_stderr(0, "mpc_event_create_file_event failed");
-        return MPC_ERROR;
+        mpc_log_err(0, "create file event failed, host: \"%V\" uri: \"%V\"",
+                    &mpc_url->host, &mpc_url->uri);
+        goto failed;
     }
 
     return MPC_OK;
+
+failed:
+
+    if (rcv_buf != NULL) {
+        mpc_buf_put(rcv_buf);
+    }
+
+    if (snd_buf != NULL) {
+        mpc_buf_put(snd_buf);
+    }
+
+    if (conn != NULL) {
+        mpc_conn_put(conn);
+    }
+
+    if (http != NULL) {
+        mpc_http_put(http);
+    }
+
+    if (sockfd != -1) {
+        close(sockfd);
+    }
+
+    return MPC_ERROR;
 }
 
 
 static void
-mpc_http_connect_handler(mpc_event_loop_t *el, int fd, void *data, int mask)
+mpc_http_release(mpc_http_t *http)
+{
+    ASSERT(http->magic == MPC_HTTP_MAGIC);
+
+    if (http->url != NULL) {
+        mpc_url_put(http->url);
+        http->url = NULL;
+    }
+
+    if (http->conn != NULL) {
+        /* TODO */
+        mpc_conn_release(http->conn);
+        http->conn = NULL;
+    }
+
+    if (http->headers != NULL) {
+        mpc_array_destroy(http->headers);
+        http->headers = NULL;
+    }
+
+    mpc_http_put(http);
+}
+
+
+static void
+mpc_http_process_connect(mpc_event_loop_t *el, int fd, void *data, int mask)
 {
     mpc_http_t  *http = (mpc_http_t *)data;
     mpc_conn_t  *conn = http->conn;
+    mpc_url_t   *mpc_url = http->url;
     int          n;
 
     conn->connected = 1;
     conn->connecting = 0;
+    http->phase = MPC_HTTP_SEND_REQUEST;
 
     n = mpc_conn_send(conn);
 
     if (n < 0) {
-        mpc_log_stderr(0, "%s\n", strerror(errno));
+        mpc_log_err(errno, "send request failed, host: \"%V\" uri: \"%V\"",
+                    &mpc_url->host, &mpc_url->uri);
+        mpc_delete_file_event(el, fd, MPC_WRITABLE);
+        mpc_http_release(http);
         return;
     }
 
+    mpc_log_debug(0, "send request bytes (%d:%d), host: \"%V\" uri: \"%V\"",
+                  n, conn->snd_bytes, &mpc_url->host, &mpc_url->uri);
+
     if (conn->done) {
         conn->done = 0;
+        mpc_log_debug(0, "send request over, prepare process response"
+                          " host: \"%V\" uri: \"%V\"",
+                          &mpc_url->host, &mpc_url->uri);
         mpc_delete_file_event(el, fd, MPC_WRITABLE);
-
         if (mpc_create_file_event(el, fd, MPC_READABLE,
-                                  mpc_http_process_status_line, (void *)http)
-            == MPC_ERROR)
+                          mpc_http_process_response, (void *)http) == MPC_ERROR)
         {
-            close(fd);
-            return;
-        }
-
-    } else {
-        if (mpc_create_file_event(el, fd, MPC_WRITABLE,
-                                  mpc_http_request_snd_handler, (void *)http)
-            == MPC_ERROR)
-        {
-            close(fd);
+            mpc_http_release(http);
             return;
         }
     }
@@ -343,125 +503,136 @@ mpc_http_connect_handler(mpc_event_loop_t *el, int fd, void *data, int mask)
 
 
 static void
-mpc_http_request_snd_handler(mpc_event_loop_t *el, int fd, void *data, int mask)
+mpc_http_process_response(mpc_event_loop_t *el, int fd, void *data, int mask)
 {
     mpc_http_t  *http = (mpc_http_t *)data;
     mpc_conn_t  *conn = http->conn;
-    int          n;
-
-    n = mpc_conn_send(conn);
-
-    if (n < 0) {
-        mpc_log_stderr(0, "send request failed");
-        return;
-    }
-
-    if (conn->done) {
-        conn->done = 0;
-        mpc_delete_file_event(el, fd, MPC_WRITABLE);
-
-        if (mpc_create_file_event(el, fd, MPC_READABLE,
-                                  mpc_http_process_status_line, (void *)http)
-            == MPC_ERROR)
-        {
-            close(fd);
-            return;
-        }
-    }
-}
-
-
-static void
-mpc_http_process_status_line(mpc_event_loop_t *el, int fd, void *data, 
-    int mask)
-{
-    mpc_http_t  *http = (mpc_http_t *)data;
-    mpc_conn_t  *conn = http->conn;
+    mpc_url_t   *mpc_url = http->url;
     int          n;
     int          rc;
 
     n = mpc_conn_recv(conn);
     if (n < 0) {
-        mpc_log_stderr(0, "recv response failed: (%d) %s", errno, strerror(errno));
+        mpc_log_err(errno, "recv response failed, host: \"%V\" uri: \"%V\"",
+                    &mpc_url->host, &mpc_url->uri);
+        mpc_delete_file_event(el, fd, MPC_READABLE);
+        mpc_http_release(http);
         return;
     }
+
+    mpc_log_debug(0, "recv response bytes (%d:%d), host: \"%V\" uri: \"%V\"",
+                  n, conn->rcv_bytes, &mpc_url->host, &mpc_url->uri);
 
     if (n == 0) {
         return;
     }
 
-    http->buf = STAILQ_FIRST(&http->conn->rcv_buf_queue);
+    if (http->buf == NULL) {
+        http->buf = STAILQ_FIRST(&http->conn->rcv_buf_queue);
+    }
+
+    switch (http->phase) {
+    case MPC_HTTP_SEND_REQUEST:
+        http->phase = MPC_HTTP_PARSE_STATUS_LINE;
+        /* fall through */
+    case MPC_HTTP_PARSE_STATUS_LINE:
+        goto parse_status_line;
+    case MPC_HTTP_PARSE_HEADERS:
+        goto parse_headers;
+    case MPC_HTTP_PARSE_BODY:
+        goto parse_body;
+    default:
+        MPC_BUG();
+    }
+
+parse_status_line:
 
     rc = mpc_http_parse_status_line(http);
 
     if (rc == MPC_ERROR) {
-        mpc_log_stderr(0, "parse status failed: %s", strerror(errno));
+        mpc_log_err(0, "parse status failed, host: \"%V\" uri: \"%V\"",
+                    &mpc_url->host, &mpc_url->uri);
+        mpc_delete_file_event(el, fd, MPC_READABLE);
+        mpc_http_release(http);
         return;
 
     } else if (rc == MPC_AGAIN) {
         return;
     }
 
-    rc = mpc_http_process_headers(http);
+    http->phase = MPC_HTTP_PARSE_HEADERS;
+    mpc_log_debug(0, "http status %d, host: \"%V\" uri: \"%V\"",
+                  http->status.code, &mpc_url->host, &mpc_url->uri);
+
+parse_headers:
+
+    rc = mpc_http_parse_headers(http);
+
     if (rc == MPC_ERROR) {
-        mpc_log_stderr(0, "parse status failed: %s", strerror(errno));
+        mpc_log_debug(0, "parse header failed, host: \"%V\" uri: \"%V\"",
+                      &mpc_url->host, &mpc_url->uri);
+        mpc_delete_file_event(el, fd, MPC_READABLE);
+        mpc_http_release(http);
         return;
+
     } else if (rc == MPC_AGAIN) {
-        if (mpc_create_file_event(el, fd, MPC_READABLE,
-                                  mpc_http_process_headers_handler,
-                                  (void *)http)
-            == MPC_ERROR)
-        {
-            close(fd);
+        return;
+    }
+
+#ifdef WITH_DEBUG
+    mpc_array_each(http->headers, mpc_http_log_headers, (void *)http);
+#endif
+    http->phase = MPC_HTTP_PARSE_BODY;
+
+parse_body:
+
+    rc = mpc_http_parse_body(http);
+    if (rc == MPC_ERROR) {
+        mpc_log_err(0, "parse body failed, host: \"%V\" uri: \"%V\"",
+                    &mpc_url->host, &mpc_url->uri);
+        mpc_delete_file_event(el, fd, MPC_READABLE);
+        mpc_http_release(http);
+        return;
+
+    } else if (rc == MPC_AGAIN) {
+        if (conn->eof) {
+            mpc_log_err(0, "connection closed by server prematurely"
+                         " host: \"%V\" uri: \"%V\"",
+                         &mpc_url->host, &mpc_url->uri);
+            mpc_delete_file_event(el, fd, MPC_READABLE);
+            mpc_http_release(http);
         }
-
-        return;
-    }
-
-    rc = mpc_http_process_body(http);
-    if (rc == MPC_ERROR) {
-        mpc_log_stderr(0, "parse status failed: %s", strerror(errno));
-        return;
-    } else if (rc == MPC_AGAIN) {
         return;
     }
 
     if (conn->eof) {
-        conn->rcv_buf->last = conn->rcv_buf->start;
+        mpc_log_debug(0, "request over server close connection,"
+                         " host: \"%V\" uri: \"%V\"",
+                         &mpc_url->host, &mpc_url->uri);
+        mpc_delete_file_event(el, fd, MPC_READABLE);
+        mpc_http_release(http);
         return;
     }
+
+    mpc_log_debug(0, "request over mpc close connection,"
+                     "host: \"%V\" uri: \"%V\"",
+                     &mpc_url->host, &mpc_url->uri);
+    mpc_delete_file_event(el, fd, MPC_READABLE);
+    mpc_http_release(http);
+    return;
 }
 
 
-static void
-mpc_http_process_headers_handler(mpc_event_loop_t *el, int fd, void *data, 
-    int mask)
+static int
+mpc_http_log_headers(void *elem, void *data)
 {
-    mpc_http_t  *http = (mpc_http_t *)data;
-    int          rc;
+    mpc_http_header_t  *header = (mpc_http_header_t *)elem;
+    mpc_http_t         *http = (mpc_http_t *)data;
+    mpc_url_t          *mpc_url = http->url;
 
-    rc = mpc_http_process_headers(http);
-    if (rc == MPC_ERROR) {
-        mpc_log_stderr(0, "parse status failed: %s", strerror(errno));
-        return;
-
-    } else if (rc == MPC_AGAIN) {
-        return;
-    }
-
-    rc = mpc_http_process_body(http);
-    if (rc == MPC_ERROR) {
-        mpc_log_stderr(0, "parse status failed: %s", strerror(errno));
-        return;
-    } else if (rc == MPC_AGAIN) {
-        return;
-    }
-
-    if (http->conn->eof) {
-        printf("Server close connection\n");
-        /* TODO */
-        return;
-    }
+    mpc_log_debug(0, "http header \"%V: %V\", host: \"%V\" uri: \"%V\"",
+                  &header->name, &header->value, &mpc_url->host, &mpc_url->uri);
+    return MPC_OK;
 }
 
 
@@ -661,7 +832,7 @@ mpc_http_parse_status_line(mpc_http_t *http)
             }
         }
 
-        if (buf->pos == buf->last) {
+        if (buf->pos - 1 == buf->last) {
             buf = STAILQ_NEXT(buf, next);
             http->buf = buf;
         }
@@ -905,7 +1076,7 @@ mpc_http_parse_header_line(mpc_http_t *http)
             }
         }
 
-        if (buf->pos == buf->last) {
+        if (buf->pos - 1 == buf->last) {
             buf = STAILQ_NEXT(buf, next);
             http->buf = buf;
         }
@@ -925,7 +1096,7 @@ header_done:
 
 
 static int
-mpc_http_process_headers(mpc_http_t *http)
+mpc_http_parse_headers(mpc_http_t *http)
 {
     int                  rc;
     mpc_http_header_t   *header;
@@ -954,10 +1125,10 @@ mpc_http_process_headers(mpc_http_t *http)
             header->value.len = http->header_end - http->header_start;
 
             /* ugly code */
-            if (header->name.len == sizeof("Content-Length")
+            if (header->name.len == sizeof("Content-Length") - 1
                 && mpc_strncasecmp(header->name.data, 
                                    (uint8_t *)"Content-Length",
-                                   sizeof("Content-Length")))
+                                   sizeof("Content-Length") - 1) == 0)
             {
                 http->content_length_n = mpc_atoi(header->value.data,
                                                   header->value.len);
@@ -965,6 +1136,8 @@ mpc_http_process_headers(mpc_http_t *http)
                     return MPC_ERROR;
                 }
             }
+
+            continue; 
 
         } else if (rc == MPC_HTTP_HEADER_DONE) {
             return MPC_OK;
@@ -982,28 +1155,33 @@ mpc_http_process_headers(mpc_http_t *http)
 
 
 static int
-mpc_http_process_body(mpc_http_t *http)
+mpc_http_parse_body(mpc_http_t *http)
 {
     mpc_buf_t *buf = http->buf;
+    mpc_url_t *mpc_url = http->url;
 
     while (buf) {
         while (buf->pos++ < buf->last) {
             http->content_length_received++;
         }
 
-        if (buf->pos == buf->last) {
+        if (buf->pos - 1 == buf->last) {
             buf = STAILQ_NEXT(buf, next);
             http->buf = buf;
         }
     }
 
+    mpc_log_debug(0, "http rcv body bytes(%d), host: \"%V\" uri: \"%V\"",
+                  http->content_length_received, &mpc_url->host, &mpc_url->uri);
+
     if (http->content_length_received == http->content_length_n) {
-        printf("ok\n");
         return MPC_OK;
     }
 
     if (http->conn->eof) {
-        mpc_log_stderr(0, "unmatch content-length");
+        mpc_log_err(0, "server close connection prematurely,"
+                       " host: \"%V\" uri: \"%V\"",
+                       &mpc_url->host, &mpc_url->uri);
         return MPC_ERROR;
     }
 

@@ -28,7 +28,13 @@
  */
 
 
+#define MPC_RESOLVER_MAGIC   0x52534c56  /* "RSLV" */
+
+
 typedef struct {
+#ifdef WITH_DEBUG
+    int                      magic;
+#endif
     mpc_event_loop_t        *el;
     mpc_gethostbyname_cb     callback;
     void                    *arg;
@@ -97,15 +103,26 @@ mpc_gethostbyname(mpc_event_loop_t *el, mpc_gethostbyname_cb callback,
     const uint8_t *name, size_t len, uint family, void *arg, const char *server)
 {
     mpc_resolver_t   *resolver;
-    int               mask;
+    int               mask, rc;
     size_t            i;
-    char              buf[512] = {};
+    char              buf[MPC_TEMP_BUF_SIZE];
 
     resolver = (mpc_resolver_t *)mpc_calloc(sizeof(mpc_resolver_t), 1);
-    assert(resolver);
-    assert(ares_init(&resolver->channel) == ARES_SUCCESS);
+    if (resolver == NULL) {
+        mpc_log_emerg(0, "oom!");
+        exit(1);
+    }
 
-    memcpy(buf, name, len);
+    SET_MAGIC(resolver, MPC_RESOLVER_MAGIC);
+
+    if ((rc = ares_init(&resolver->channel)) != ARES_SUCCESS) {
+        mpc_log_emerg(0, "ares_init failed: (%d: %s)", rc, ares_strerror(rc));
+        mpc_free(resolver);
+        return;
+    }
+
+    mpc_memzero(buf, sizeof(buf));
+    mpc_memcpy(buf, name, MPC_MIN(len, sizeof(buf)));
 
     if (server) {
         ares_set_servers_csv(resolver->channel, server);
