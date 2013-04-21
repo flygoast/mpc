@@ -35,7 +35,7 @@ static uint32_t         mpc_conn_nfree;
 static mpc_conn_hdr_t   mpc_conn_free_queue;
 
 
-static void mpc_conn_reset(mpc_conn_t *conn);
+static void mpc_conn_default(mpc_conn_t *conn);
 
 
 mpc_conn_t *
@@ -52,7 +52,7 @@ mpc_conn_get(void)
         ASSERT(conn->magic == MPC_CONN_MAGIC);
 
     } else {
-        conn = mpc_alloc(sizeof(*conn));
+        conn = mpc_alloc(sizeof(mpc_conn_t));
         if (conn == NULL) {
             return NULL;
         }
@@ -60,7 +60,7 @@ mpc_conn_get(void)
         SET_MAGIC(conn, MPC_CONN_MAGIC);
     }
 
-    mpc_conn_reset(conn);
+    mpc_conn_default(conn);
 
     return conn;
 }
@@ -76,7 +76,7 @@ mpc_conn_free(mpc_conn_t *conn)
 void
 mpc_conn_put(mpc_conn_t *conn)
 {
-    mpc_conn_reset(conn);
+    mpc_conn_default(conn);
     mpc_conn_nfree++;
     TAILQ_INSERT_HEAD(&mpc_conn_free_queue, conn, next);
 }
@@ -140,8 +140,11 @@ mpc_conn_recv(mpc_conn_t *conn)
         sum += n;
 
         if (conn->rcv_buf->end == conn->rcv_buf->last) {
-            mpc_buf = mpc_buf_get();
-            mpc_buf_insert(&conn->rcv_buf_queue, mpc_buf);
+            mpc_buf = STAILQ_NEXT(conn->rcv_buf, next);
+            if (mpc_buf == NULL) {
+                mpc_buf = mpc_buf_get();
+                mpc_buf_insert(&conn->rcv_buf_queue, mpc_buf);
+            }
             conn->rcv_buf = mpc_buf;
         }
     }
@@ -152,7 +155,7 @@ mpc_conn_recv(mpc_conn_t *conn)
 
 
 static void
-mpc_conn_reset(mpc_conn_t *conn)
+mpc_conn_default(mpc_conn_t *conn)
 {
     ASSERT(conn->magic == MPC_CONN_MAGIC); 
 
@@ -225,11 +228,13 @@ mpc_conn_release(mpc_conn_t *conn)
 
     for (buf = STAILQ_FIRST(&conn->rcv_buf_queue); buf != NULL; buf = nbuf) {
         nbuf = STAILQ_NEXT(buf, next);
+        STAILQ_NEXT(buf, next) = NULL;
         mpc_buf_put(buf);
     }
 
     for (buf = STAILQ_FIRST(&conn->snd_buf_queue); buf != NULL; buf = nbuf) {
         nbuf = STAILQ_NEXT(buf, next);
+        STAILQ_NEXT(buf, next) = NULL;
         mpc_buf_put(buf);
     }
 
@@ -238,4 +243,31 @@ mpc_conn_release(mpc_conn_t *conn)
     }
 
     mpc_conn_put(conn);
+}
+
+
+void
+mpc_conn_reset(mpc_conn_t *conn)
+{
+    ASSERT(conn->magic == MPC_CONN_MAGIC); 
+
+    if (conn->fd != -1) {
+        close(conn->fd);
+        conn->fd = -1;
+    }
+
+    mpc_buf_queue_rewind(&conn->rcv_buf_queue);
+    mpc_buf_queue_rewind(&conn->snd_buf_queue);
+
+    conn->rcv_buf = NULL;
+    conn->snd_buf = NULL;
+
+    conn->rcv_bytes = 0;
+    conn->snd_bytes = 0;
+
+    conn->keepalive = 0;
+    conn->connecting = 0;
+    conn->connected = 0;
+    conn->eof = 0;
+    conn->done = 0;
 }

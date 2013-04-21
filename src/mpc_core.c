@@ -170,10 +170,11 @@ mpc_core_process_accept(mpc_event_loop_t *el, int fd, void *data, int mask)
 static void
 mpc_core_process_notify(mpc_event_loop_t *el, int fd, void *data, int mask)
 {
-    int             n;
-    char            buf[MPC_TEMP_BUF_SIZE];
-    mpc_url_t      *mpc_url;
-    mpc_instance_t *ins = (mpc_instance_t *)data;
+    int              n;
+    char             buf[MPC_TEMP_BUF_SIZE];
+    mpc_url_t       *mpc_url;
+    mpc_instance_t  *ins = (mpc_instance_t *)data;
+    mpc_http_t      *mpc_http;
 
     for (;;) {
 
@@ -205,13 +206,25 @@ mpc_core_process_notify(mpc_event_loop_t *el, int fd, void *data, int mask)
                 MPC_BUG();
             }
 
-            mpc_log_debug(0, "receive url(%d), host: \"%V\" uri: \"%V\"",
+            mpc_http = mpc_http_get();
+            if (mpc_http == NULL) {
+                mpc_log_emerg(0, "oom when get http");
+                exit(1);
+            }
+
+            mpc_http->ins = ins;
+            mpc_http->url = mpc_url;
+
+            mpc_log_debug(0, "receive http url(%d), host: \"%V\" uri: \"%V\"",
                           mpc_url->url_id, &mpc_url->host, &mpc_url->uri);
 
-            if (mpc_http_process_url(ins, mpc_url, NULL) != MPC_OK) {
+            if (mpc_http_process_request(mpc_http) != MPC_OK) {
                 mpc_log_err(0, "process url \"http://%V%V\" failed, ignored",
                             &mpc_url->host, &mpc_url->uri);
+                mpc_url_put(mpc_url);
+                mpc_http_put(mpc_http);
             }
+
         } while (--n);
     }
 }

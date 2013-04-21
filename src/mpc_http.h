@@ -92,9 +92,10 @@ TAILQ_HEAD(mpc_http_hdr_s, mpc_http_s);
 
 void mpc_http_init();
 void mpc_http_deinit();
+mpc_http_t *mpc_http_get();
+void mpc_http_put(mpc_http_t *mpc_http);
 int mpc_http_parse_url(uint8_t *url, size_t n, mpc_url_t *mpc_url);
-int mpc_http_process_url(mpc_instance_t *ins, mpc_url_t *mpc_url,
-    mpc_http_t *http);
+int mpc_http_process_request(mpc_http_t *http);
 
 
 #endif /* __MPC_HTTP_H_INCLUDED__ */

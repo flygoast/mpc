@@ -242,3 +242,16 @@ mpc_buf_deinit(void)
 
     ASSERT(mpc_buf_nfree == 0);
 }
+
+
+void
+mpc_buf_queue_rewind(mpc_buf_hdr_t *mpc_hdr)
+{
+     mpc_buf_t *buf, *nbuf;   /* current and next buf */
+
+    for (buf = STAILQ_FIRST(mpc_hdr); buf != NULL; buf = nbuf) {
+        nbuf = STAILQ_NEXT(buf, next);
+        buf->pos = buf->start;
+        buf->last = buf->start;
+    }
+}

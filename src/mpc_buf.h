@@ -90,6 +90,7 @@ STAILQ_HEAD(mpc_buf_hdr_s, mpc_buf_s);
 
 void mpc_buf_init(void);
 void mpc_buf_deinit(void);
+void mpc_buf_queue_rewind(mpc_buf_hdr_t *mpc_hdr);
 void mpc_buf_put(mpc_buf_t *mpc_buf);
 void mpc_buf_insert(mpc_buf_hdr_t *mpc_hdr, mpc_buf_t *mpc_buf);
 void mpc_buf_remove(mpc_buf_hdr_t *mpc_hdr, mpc_buf_t *mpc_buf);
