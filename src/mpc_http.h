@@ -65,6 +65,7 @@ struct mpc_http_s {
     uint32_t                 magic;
 #endif
     TAILQ_ENTRY(mpc_http_s)  next;
+    mpc_instance_t          *ins;
     mpc_conn_t              *conn;
     mpc_url_t               *url;
     int                      phase;
@@ -92,6 +93,8 @@ TAILQ_HEAD(mpc_http_hdr_s, mpc_http_s);
 void mpc_http_init();
 void mpc_http_deinit();
 int mpc_http_parse_url(uint8_t *url, size_t n, mpc_url_t *mpc_url);
-int mpc_http_process_url(mpc_instance_t *ins, mpc_url_t *mpc_url);
+int mpc_http_process_url(mpc_instance_t *ins, mpc_url_t *mpc_url,
+    mpc_http_t *http);
+
 
 #endif /* __MPC_HTTP_H_INCLUDED__ */

@@ -208,7 +208,7 @@ mpc_core_process_notify(mpc_event_loop_t *el, int fd, void *data, int mask)
             mpc_log_debug(0, "receive url(%d), host: \"%V\" uri: \"%V\"",
                           mpc_url->url_id, &mpc_url->host, &mpc_url->uri);
 
-            if (mpc_http_process_url(ins, mpc_url) != MPC_OK) {
+            if (mpc_http_process_url(ins, mpc_url, NULL) != MPC_OK) {
                 mpc_log_err(0, "process url \"http://%V%V\" failed, ignored",
                             &mpc_url->host, &mpc_url->uri);
             }
@@ -326,7 +326,7 @@ mpc_core_getline(char *buf, int size, FILE *fp)
     
         len = strlen(buf);
     
-        while (len > 0 && (buf[len - 1]  == '\n' || buf[len - 1] == '\r' 
+        while (len > 0 && (buf[len - 1]  == LF || buf[len - 1] == CR
                            || buf[len - 1] == '\t' || buf[len - 1] == ' '))
         {
             buf[len - 1] = '\0';

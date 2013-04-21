@@ -52,9 +52,10 @@ static int mpc_http_parse_status_line(mpc_http_t *http);
 static int mpc_http_parse_headers(mpc_http_t *http);
 static int mpc_http_parse_body(mpc_http_t *http);
 static int mpc_http_create_request(char *addr, mpc_event_loop_t *el,
-    mpc_url_t *mpc_url);
+    mpc_http_t *mpc_http);
 static int mpc_http_log_headers(void *elem, void *data);
 static int mpc_http_release_url(void *elem, void *data);
+static void mpc_http_release(mpc_http_t *http);
 
 
 void
@@ -68,6 +69,7 @@ mpc_http_reset(mpc_http_t *http)
     http->buf = NULL;
     http->phase = MPC_HTTP_SEND_REQUEST;
     http->locations = NULL;
+    http->ins = NULL;
 
     mpc_memzero(&http->status, sizeof(http->status));
 
@@ -259,22 +261,33 @@ mpc_http_parse_url(uint8_t *url, size_t n, mpc_url_t *mpc_url)
 
 
 int
-mpc_http_process_url(mpc_instance_t *ins, mpc_url_t *mpc_url)
+mpc_http_process_url(mpc_instance_t *ins, mpc_url_t *mpc_url, 
+    mpc_http_t *mpc_http)
 {
+    if (mpc_http == NULL) {
+        mpc_http = mpc_http_get();
+        if (mpc_http == NULL) {
+            mpc_log_emerg(errno, "oom!");
+            exit(1);
+        }
+    }
+
+    mpc_http->url = mpc_url;
+    mpc_http->ins = ins;
+
     if (mpc_url->no_resolve) {
-        if (mpc_http_create_request((char *)mpc_url->host.data, ins->el, 
-                                    mpc_url) != MPC_OK)
+        if (mpc_http_create_request((char *)mpc_url->host.data, ins->el,
+                                    mpc_http) != MPC_OK)
         {
             mpc_log_err(0, "create http request \"http://%V%V\" failed",
                         &mpc_url->host, &mpc_url->uri);
-            mpc_url_put(mpc_url);
         }
 
     } else {
 #ifdef WITH_MPC_RESOLVER
         mpc_gethostbyname(ins->el, mpc_http_gethostbyname_cb, 
                           mpc_url->host.data, mpc_url->host.len,
-                          AF_INET, (void *)mpc_url, NULL);
+                          AF_INET, (void *)mpc_http, NULL);
 #else
         mpc_log_emerg(0, "mpc not compiled with resolver." CRLF
                          "Please recompile it with -DWITH_MPC_RESOLVER");
@@ -291,7 +304,8 @@ static void
 mpc_http_gethostbyname_cb(mpc_event_loop_t *el, int status,
     struct hostent *host, void *arg)
 {
-    mpc_url_t  *mpc_url = (mpc_url_t *)arg;
+    mpc_http_t  *mpc_http = (mpc_http_t *)arg;
+    mpc_url_t   *mpc_url = mpc_http->url;
 
     if (status == MPC_RESOLVER_OK) {
 #ifdef WITH_DEBUG
@@ -302,10 +316,9 @@ mpc_http_gethostbyname_cb(mpc_event_loop_t *el, int status,
                       (addr & 0xff0000) >> 16, (addr & 0xff000000) >> 24);
 #endif
 
-        if (mpc_http_create_request(host->h_addr, el, mpc_url) != MPC_OK) {
+        if (mpc_http_create_request(host->h_addr, el, mpc_http) != MPC_OK) {
             mpc_log_err(0, "create http request \"http://%V%V\" failed",
                         &mpc_url->host, &mpc_url->uri);
-            mpc_url_put(mpc_url);
         }
     } else {
         mpc_log_err(0, "gethostbyname failed: (%d: %s)", 
@@ -317,47 +330,56 @@ mpc_http_gethostbyname_cb(mpc_event_loop_t *el, int status,
 
 
 static int
-mpc_http_create_request(char *addr, mpc_event_loop_t *el, mpc_url_t *mpc_url)
+mpc_http_create_request(char *addr, mpc_event_loop_t *el, mpc_http_t *mpc_http)
 {
     int          flags;
     int          sockfd;
     uint8_t     *p, *last;
     mpc_buf_t   *rcv_buf, *snd_buf;
     mpc_conn_t  *conn;
-    mpc_http_t  *http;
+    mpc_url_t   *mpc_url = mpc_http->url;
 
     rcv_buf = NULL;
     snd_buf = NULL;
     conn = NULL;
-    http = NULL;
     sockfd = -1;
 
-    conn = mpc_conn_get();
-    if (conn == NULL) {
-        mpc_log_emerg(0, "get conn failed, host: \"%V\" uri:\"%V\"", 
-                      &mpc_url->host, &mpc_url->uri);
-        goto failed;
+    if (mpc_http->conn == NULL) {
+        mpc_http->conn = mpc_conn_get();
+        if (mpc_http->conn == NULL) {
+            mpc_log_emerg(0, "get conn failed, host: \"%V\" uri:\"%V\"", 
+                          &mpc_url->host, &mpc_url->uri);
+            goto failed;
+        }
     }
 
-    rcv_buf = mpc_buf_get();
-    if (rcv_buf == NULL) {
-        mpc_log_emerg(0, "get buf failed, host: \"%V\" uri:\"%V\"",
-                      &mpc_url->host, &mpc_url->uri);
-        goto failed;
+    conn = mpc_http->conn;
+
+    if (conn->rcv_buf == NULL) {
+        rcv_buf = mpc_buf_get();
+        if (rcv_buf == NULL) {
+            mpc_log_emerg(0, "get buf failed, host: \"%V\" uri:\"%V\"",
+                          &mpc_url->host, &mpc_url->uri);
+            goto failed;
+        }
+
+        mpc_buf_insert(&conn->rcv_buf_queue, rcv_buf);
+        conn->rcv_buf = rcv_buf;
     }
+    rcv_buf = conn->rcv_buf;
 
-    mpc_buf_insert(&conn->rcv_buf_queue, rcv_buf);
-    conn->rcv_buf = rcv_buf;
-
-    snd_buf = mpc_buf_get();
-    if (snd_buf == NULL) {
-        mpc_log_emerg(0, "get buf failed, host: \"%V\" uri:\"%V\"",
-                      &mpc_url->host, &mpc_url->uri);
-        goto failed;
+    if (conn->snd_buf == NULL) {
+        snd_buf = mpc_buf_get();
+        if (snd_buf == NULL) {
+            mpc_log_emerg(0, "get buf failed, host: \"%V\" uri:\"%V\"",
+                          &mpc_url->host, &mpc_url->uri);
+            goto failed;
+        }
+    
+        mpc_buf_insert(&conn->snd_buf_queue, snd_buf);
+        conn->snd_buf = snd_buf;
     }
-
-    mpc_buf_insert(&conn->snd_buf_queue, snd_buf);
-    conn->snd_buf = snd_buf;
+    snd_buf = conn->snd_buf;
 
     ASSERT(snd_buf->pos == snd_buf->start);
 
@@ -392,18 +414,8 @@ mpc_http_create_request(char *addr, mpc_event_loop_t *el, mpc_url_t *mpc_url)
     conn->connecting = 1;
     conn->fd = sockfd;
 
-    http = mpc_http_get();
-    if (http == NULL) {
-        mpc_log_emerg(0, "get http failed, host: \"%V\" uri: \"%V\"",
-                      &mpc_url->host, &mpc_url->uri);
-        goto failed;
-    }
-
-    http->conn = conn;
-    http->url = mpc_url;
-
     if (mpc_create_file_event(el, sockfd, MPC_WRITABLE, 
-                              mpc_http_process_connect, (void *)http)
+                              mpc_http_process_connect, (void *)mpc_http)
         == MPC_ERROR)
     {
         mpc_log_err(0, "create file event failed, host: \"%V\" uri: \"%V\"",
@@ -415,25 +427,7 @@ mpc_http_create_request(char *addr, mpc_event_loop_t *el, mpc_url_t *mpc_url)
 
 failed:
 
-    if (rcv_buf != NULL) {
-        mpc_buf_put(rcv_buf);
-    }
-
-    if (snd_buf != NULL) {
-        mpc_buf_put(snd_buf);
-    }
-
-    if (conn != NULL) {
-        mpc_conn_put(conn);
-    }
-
-    if (http != NULL) {
-        mpc_http_put(http);
-    }
-
-    if (sockfd != -1) {
-        close(sockfd);
-    }
+    mpc_http_release(mpc_http);
 
     return MPC_ERROR;
 }
@@ -511,11 +505,13 @@ mpc_http_process_connect(mpc_event_loop_t *el, int fd, void *data, int mask)
 static void
 mpc_http_process_response(mpc_event_loop_t *el, int fd, void *data, int mask)
 {
-    mpc_http_t  *http = (mpc_http_t *)data;
-    mpc_conn_t  *conn = http->conn;
-    mpc_url_t   *mpc_url = http->url;
-    int          n;
-    int          rc;
+    mpc_http_t   *http = (mpc_http_t *)data;
+    mpc_conn_t   *conn = http->conn;
+    mpc_url_t    *mpc_url = http->url;
+    mpc_url_t    *temp_url;
+    mpc_url_t   **url_index;
+    int           n;
+    int           rc;
 
     n = mpc_conn_recv(conn);
     if (n < 0) {
@@ -611,27 +607,36 @@ parse_body:
         return;
     }
 
-#if 0
-    if (http->need_redirect) {
-        new_url = *(mpc_url_t **)mpc_array_top(http->locations);
-        mpc_log_debug(0, "redirect to \"http://%V%V\"", 
-                      &new_url->host, &new_url->uri);
-    }
-#endif
-
     if (conn->eof) {
         mpc_log_debug(0, "request over server close connection,"
                          " host: \"%V\" uri: \"%V\"",
                          &mpc_url->host, &mpc_url->uri);
-        mpc_delete_file_event(el, fd, MPC_READABLE);
-        mpc_http_release(http);
+    } else {
+        mpc_log_debug(0, "request over mpc close connection,"
+                         "host: \"%V\" uri: \"%V\"",
+                         &mpc_url->host, &mpc_url->uri);
+    }
+
+    close(http->conn->fd);
+    http->conn->fd = -1;
+    mpc_delete_file_event(el, fd, MPC_READABLE);
+
+    if (http->need_redirect) {
+        http->need_redirect = 0;
+        url_index = (mpc_url_t **)mpc_array_top(http->locations);
+        temp_url = *url_index;
+        *url_index = http->url;
+        http->url = temp_url;
+        mpc_log_debug(0, "redirect to \"http://%V%V\"", 
+                      &temp_url->host, &temp_url->uri);
+        if (mpc_http_process_url(http->ins, http->url, http) != MPC_OK) {
+            mpc_log_err(0, "process url \"http://%V%V\" failed, ignored",
+                        &mpc_url->host, &mpc_url->uri);
+        }
+
         return;
     }
 
-    mpc_log_debug(0, "request over mpc close connection,"
-                     "host: \"%V\" uri: \"%V\"",
-                     &mpc_url->host, &mpc_url->uri);
-    mpc_delete_file_event(el, fd, MPC_READABLE);
     mpc_http_release(http);
     return;
 }
