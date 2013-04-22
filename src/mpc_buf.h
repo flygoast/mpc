@@ -37,6 +37,7 @@
 #define MPC_BUF_MAX_SIZE    65536
 #define MPC_BUF_SIZE        16384
 #define MPC_BUF_HSIZE       sizeof(mpc_buf_t)
+#define MPC_BUF_MAX_NFREE   128
 
 #define mpc_buf_empty(buf)  (((buf)->pos == (buf)->last) ? 1 : 0)
 #define mpc_buf_full(buf)   (((buf)->last == (buf)->end) ? 1 : 0)
@@ -88,7 +89,7 @@ STAILQ_HEAD(mpc_buf_hdr_s, mpc_buf_s);
 #define mpc_buf_data_size         mpc_buf_offset
 
 
-void mpc_buf_init(void);
+void mpc_buf_init(uint32_t max_nfree);
 void mpc_buf_deinit(void);
 void mpc_buf_queue_rewind(mpc_buf_hdr_t *mpc_hdr);
 void mpc_buf_put(mpc_buf_t *mpc_buf);

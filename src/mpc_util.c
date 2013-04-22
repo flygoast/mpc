@@ -192,3 +192,29 @@ mpc_hex_dump(uint8_t *dst, uint8_t *src, size_t len)
 
     return dst;
 }
+
+
+uint64_t
+time_ms(void)
+{
+    struct timeval   tv;
+    uint64_t         mst;
+
+    gettimeofday(&tv, NULL);
+    mst = ((uint64_t)tv.tv_sec) * 1000;
+    mst += tv.tv_usec / 1000;
+    return mst;
+}
+
+
+uint64_t
+time_us(void)
+{
+    struct timeval  tv;
+    uint64_t        ust;
+
+    gettimeofday(&tv, NULL);
+    ust = ((uint64_t)tv.tv_sec) * 1000000;
+    ust += tv.tv_usec;
+    return ust;
+}

@@ -33,6 +33,7 @@
 
 static uint32_t         mpc_conn_nfree;
 static mpc_conn_hdr_t   mpc_conn_free_queue;
+static uint32_t         mpc_conn_max_nfree;
 
 
 static void mpc_conn_default(mpc_conn_t *conn);
@@ -77,14 +78,22 @@ void
 mpc_conn_put(mpc_conn_t *conn)
 {
     mpc_conn_default(conn);
-    mpc_conn_nfree++;
-    TAILQ_INSERT_HEAD(&mpc_conn_free_queue, conn, next);
+
+    if (mpc_conn_max_nfree != 0 && mpc_conn_nfree + 1 > mpc_conn_max_nfree) {
+        mpc_conn_free(conn);
+
+    } else {
+        mpc_conn_nfree++;
+        TAILQ_INSERT_HEAD(&mpc_conn_free_queue, conn, next);
+    }
 }
 
 
 void
-mpc_conn_init(void)
+mpc_conn_init(uint32_t max_nfree)
 {
+
+    mpc_conn_max_nfree = max_nfree;
     mpc_conn_nfree = 0;
     TAILQ_INIT(&mpc_conn_free_queue);
 }
@@ -164,8 +173,8 @@ mpc_conn_default(mpc_conn_t *conn)
     STAILQ_INIT(&conn->rcv_buf_queue);
     STAILQ_INIT(&conn->snd_buf_queue);
 
-    conn->rcv_buf = NULL;
-    conn->snd_buf = NULL;
+    conn->rcv_buf = STAILQ_FIRST(&conn->rcv_buf_queue);
+    conn->snd_buf = STAILQ_FIRST(&conn->snd_buf_queue);
 
     conn->rcv_bytes = 0;
     conn->snd_bytes = 0;
@@ -247,6 +256,20 @@ mpc_conn_release(mpc_conn_t *conn)
 
 
 void
+mpc_conn_buf_rewind(mpc_conn_t *conn)
+{
+    mpc_buf_queue_rewind(&conn->rcv_buf_queue);
+    mpc_buf_queue_rewind(&conn->snd_buf_queue);
+
+    conn->rcv_buf = STAILQ_FIRST(&conn->rcv_buf_queue);
+    conn->snd_buf = STAILQ_FIRST(&conn->snd_buf_queue);
+
+    conn->rcv_bytes = 0;
+    conn->snd_bytes = 0;
+}
+
+
+void
 mpc_conn_reset(mpc_conn_t *conn)
 {
     ASSERT(conn->magic == MPC_CONN_MAGIC); 
@@ -256,14 +279,7 @@ mpc_conn_reset(mpc_conn_t *conn)
         conn->fd = -1;
     }
 
-    mpc_buf_queue_rewind(&conn->rcv_buf_queue);
-    mpc_buf_queue_rewind(&conn->snd_buf_queue);
-
-    conn->rcv_buf = NULL;
-    conn->snd_buf = NULL;
-
-    conn->rcv_bytes = 0;
-    conn->snd_bytes = 0;
+    mpc_conn_buf_rewind(conn);
 
     conn->keepalive = 0;
     conn->connecting = 0;

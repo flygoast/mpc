@@ -167,7 +167,7 @@ mpc_url_put(mpc_url_t *mpc_url)
     ASSERT(STAILQ_NEXT(mpc_url, next) == NULL);
     ASSERT(mpc_url->magic == MPC_URL_MAGIC);
 
-    if (mpc_url_nfree + 1 > mpc_url_max_nfree) {
+    if (mpc_url_max_nfree != 0 && mpc_url_nfree + 1 > mpc_url_max_nfree) {
         mpc_url_free(mpc_url);
         
     } else {

@@ -31,6 +31,10 @@
 #include <mpc_core.h>
 
 
+static void mpc_signal_handler(int signo);
+static void mpc_backtrace(int skip_count);
+
+
 static mpc_signal_t signals[] = {
     { SIGUSR1, "SIGUSR1", 0,                 mpc_signal_handler },
     { SIGUSR2, "SIGUSR2", 0,                 mpc_signal_handler },
@@ -59,11 +63,11 @@ mpc_signal_init(void)
 
         status = sigaction(sig->signo, &sa, NULL);
         if (status < 0) {
-            return NC_ERROR;
+            return MPC_ERROR;
         }
     }
 
-    return NC_OK;
+    return MPC_OK;
 }
 
 
@@ -74,7 +78,7 @@ mpc_signal_deinit(void)
 }
 
 
-void
+static void
 mpc_signal_handler(int signo)
 {
     mpc_signal_t  *sig;
@@ -88,9 +92,7 @@ mpc_signal_handler(int signo)
         }
     }
 
-#ifdef WITH_DEBUG
-    assert(sig->signo != 0);
-#endif
+    ASSERT(sig->signo != 0);
 
     action_str = "";
     action = NULL;
@@ -130,7 +132,7 @@ mpc_signal_handler(int signo)
         break;
 
     default:
-        NOT_REACHED();
+        break;
     }
 
     if (action != NULL) {
@@ -143,7 +145,7 @@ mpc_signal_handler(int signo)
 }
 
 
-void
+static void
 mpc_backtrace(int skip_count)
 {
     void   *stack[64];

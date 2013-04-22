@@ -28,8 +28,8 @@
  */
 
 
-#ifndef __NC_SIGNAL_H_INCLUDED__
-#define __NC_SIGNAL_H_INCLUDED__
+#ifndef __MPC_SIGNAL_H_INCLUDED__
+#define __MPC_SIGNAL_H_INCLUDED__
 
 
 typedef struct {
@@ -40,4 +40,8 @@ typedef struct {
 } mpc_signal_t;
 
 
-#endif /* __NC_SIGNAL_H_INCLUDED__ */
+int mpc_signal_init(void);
+void mpc_signal_deinit(void);
+
+
+#endif /* __MPC_SIGNAL_H_INCLUDED__ */

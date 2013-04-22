@@ -33,6 +33,7 @@
 
 static uint32_t         mpc_buf_nfree;          /* # free mpc_buf */
 static mpc_buf_hdr_t    mpc_buf_free_queue;     /* free mpc_buf queue */
+static uint32_t         mpc_buf_max_nfree;      /* max # free mpc_buf_t */
 static size_t           mpc_buf_chunk_size;
 static size_t           mpc_buf_offset;
 
@@ -129,8 +130,13 @@ mpc_buf_put(mpc_buf_t *mpc_buf)
     ASSERT(STAILQ_NEXT(mpc_buf, next) == NULL);
     ASSERT(mpc_buf->magic == MPC_BUF_MAGIC);
 
-    mpc_buf_nfree++;
-    STAILQ_INSERT_HEAD(&mpc_buf_free_queue, mpc_buf, next);
+    if (mpc_buf_max_nfree != 0 && mpc_buf_nfree + 1 > mpc_buf_max_nfree) {
+        mpc_buf_free(mpc_buf);
+
+    } else {
+        mpc_buf_nfree++;
+        STAILQ_INSERT_HEAD(&mpc_buf_free_queue, mpc_buf, next);
+    }
 }
 
 
@@ -220,8 +226,9 @@ mpc_buf_split(mpc_buf_hdr_t *h, uint8_t *pos, mpc_buf_copy_pt cb, void *cbarg)
 
 
 void
-mpc_buf_init(void)
+mpc_buf_init(uint32_t max_nfree)
 {
+    mpc_buf_max_nfree = max_nfree;
     mpc_buf_nfree = 0;
     STAILQ_INIT(&mpc_buf_free_queue);
 

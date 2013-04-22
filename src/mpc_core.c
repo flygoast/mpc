@@ -60,13 +60,15 @@ mpc_core_init(mpc_instance_t *ins)
 {
     mpc_log_init(ins->log_level, ins->log_file);
 
-    mpc_buf_init();
-    mpc_conn_init();
+    mpc_buf_init(MPC_BUF_MAX_NFREE);
+    mpc_conn_init(MPC_CONN_MAX_NFREE);
 
     if (ins->input_filename) {
         mpc_url_init(MPC_URL_MAX_NFREE);
     }
-    mpc_http_init();
+    mpc_http_init(MPC_HTTP_MAX_NFREE);
+
+    mpc_signal_init();
 
     ins->el = mpc_create_event_loop(MPC_DEFAULT_EVENT_SIZE);
     if (ins->el == NULL) {
@@ -93,6 +95,9 @@ mpc_core_deinit(mpc_instance_t *ins)
     if (ins->el) {
         mpc_free_event_loop(ins->el);
     }
+
+
+    mpc_signal_deinit();
 
     mpc_log_deinit();
 

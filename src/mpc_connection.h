@@ -32,6 +32,7 @@
 
 
 #define MPC_CONN_MAGIC      0x4e4e4f43   /* "CONN" */
+#define MPC_CONN_MAX_NFREE  128
 
 
 typedef struct mpc_conn_s mpc_conn_t;
@@ -66,11 +67,12 @@ TAILQ_HEAD(mpc_conn_hdr_s, mpc_conn_s);
 
 mpc_conn_t *mpc_conn_get(void);
 void mpc_conn_put(mpc_conn_t *conn);
-void mpc_conn_init(void);
+void mpc_conn_init(uint32_t max_nfree);
 void mpc_conn_deinit(void);
 int mpc_conn_recv(mpc_conn_t *conn);
 int mpc_conn_send(mpc_conn_t *conn);
 void mpc_conn_release(mpc_conn_t *conn);
+void mpc_conn_buf_rewind(mpc_conn_t *conn);
 void mpc_conn_reset(mpc_conn_t *conn);
 
 

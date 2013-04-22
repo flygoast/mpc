@@ -39,6 +39,7 @@
 #define MPC_HTTP_PARSE_BODY             3
 
 #define MPC_HTTP_MAX_REDIRECT           10
+#define MPC_HTTP_MAX_NFREE              128
 
 
 typedef struct mpc_http_s mpc_http_t;
@@ -58,6 +59,14 @@ typedef struct {
     mpc_str_t   name;
     mpc_str_t   value;
 } mpc_http_header_t;
+
+
+typedef struct {
+    uint64_t    start;
+    uint64_t    connected;
+    uint64_t    first_packet_reach;
+    uint64_t    end;
+} mpc_http_bench_t;
 
 
 struct mpc_http_s {
@@ -83,6 +92,8 @@ struct mpc_http_s {
     uint8_t                 *header_end;
     int                      content_length_n;
     int                      content_length_received;
+
+    mpc_http_bench_t         bench;
     unsigned                 need_redirect:1;
 };
 
@@ -90,7 +101,7 @@ struct mpc_http_s {
 TAILQ_HEAD(mpc_http_hdr_s, mpc_http_s);
 
 
-void mpc_http_init();
+void mpc_http_init(uint32_t max_nfree);
 void mpc_http_deinit();
 mpc_http_t *mpc_http_get();
 void mpc_http_put(mpc_http_t *mpc_http);

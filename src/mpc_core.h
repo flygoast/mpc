@@ -43,17 +43,20 @@
 #include <errno.h>
 #include <assert.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/resource.h>
 #include <sched.h>
 #include <pthread.h>
+#include <execinfo.h>
 
 
 typedef struct mpc_instance_s mpc_instance_t;
 
 
+#include <mpc_signal.h>
 #include <mpc_queue.h>
 #include <mpc_string.h>
 #include <mpc_log.h>
@@ -115,6 +118,7 @@ struct mpc_instance_s {
     char                *log_file;
     mpc_event_loop_t    *el;
     int                  self_pipe[2];
+    unsigned             follow_location:1;
 };
 
 
