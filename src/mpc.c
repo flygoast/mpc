@@ -44,6 +44,7 @@ static struct option long_options[] = {
     { "test",       no_argument,        NULL,   't' },
     { "daemon",     no_argument,        NULL,   'd' },
     { "follow",     no_argument,        NULL,   'F' },
+    { "replay",     no_argument,        NULL,   'r' },
     { "log",        required_argument,  NULL,   'l' },
     { "level",      required_argument,  NULL,   'L' },
     { "conf",       required_argument,  NULL,   'c' },
@@ -54,7 +55,7 @@ static struct option long_options[] = {
 };
 
 
-static char *short_options = "hvtdFl:L:c:f:a:p:";
+static char *short_options = "hvtdFrl:L:c:f:a:p:";
 
 
 static int
@@ -87,6 +88,10 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
 
         case 'F':
             ins->follow_location = 1;
+            break;
+
+        case 'r':
+            ins->replay = 1;
             break;
 
         case 'c':
@@ -180,6 +185,7 @@ mpc_set_default_option(mpc_instance_t *ins)
     ins->port = MPC_DEFAULT_PORT;
 
     ins->follow_location = 0;
+    ins->replay = 0;
     ins->log_level = MPC_LOG_INFO;
     ins->log_file = NULL;
 

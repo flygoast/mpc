@@ -69,6 +69,10 @@ typedef struct {
 } mpc_http_bench_t;
 
 
+typedef struct {
+
+} mpc_http_stat_t;
+
 struct mpc_http_s {
 #ifdef WITH_DEBUG
     uint32_t                 magic;
