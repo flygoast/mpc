@@ -33,7 +33,7 @@
 
 
 #define MPC_URL_MAGIC           0x4d55524c  /* "MURL" */
-#define MPC_URL_BUF_SIZE        512
+#define MPC_URL_BUF_SIZE        256
 #define MPC_URL_MAX_NFREE       128
 
 
@@ -53,6 +53,7 @@ struct mpc_url_s {
     uint8_t                    *buf;
     uint32_t                    buf_size;
     unsigned                    no_resolve:1;
+    unsigned                    no_put:1;
 };
 
 

@@ -354,7 +354,9 @@ mpc_http_gethostbyname_cb(mpc_event_loop_t *el, int status,
     } else {
         mpc_log_err(0, "gethostbyname failed: (%d: %s)", 
                     status, ares_strerror(status));
-        mpc_url_put(mpc_url);
+        if (mpc_url->no_put == 0) {
+            mpc_url_put(mpc_url);
+        }
     }
 }
 #endif
@@ -377,6 +379,8 @@ mpc_http_create_request(char *addr, mpc_http_t *mpc_http)
     snd_buf = NULL;
     conn = NULL;
     sockfd = -1;
+
+    mpc_http->ins->cur_concurrent++;
 
     if (mpc_http->conn == NULL) {
         mpc_http->conn = mpc_conn_get();
@@ -439,7 +443,7 @@ mpc_http_create_request(char *addr, mpc_http_t *mpc_http)
     }
 
     mpc_http->bench.start = time_us();
-
+    
     sockfd = mpc_net_tcp_connect(addr, mpc_url->port, MPC_NET_NONBLOCK);
     if (sockfd == MPC_ERROR) {
         mpc_log_err(errno, "tcp connect failed, host: \"%V\" uri: \"%V\"",
@@ -463,6 +467,10 @@ mpc_http_create_request(char *addr, mpc_http_t *mpc_http)
 
 failed:
 
+    mpc_http->ins->cur_concurrent--;
+
+    ASSERT(mpc_http->ins->cur_concurrent >= 0);
+
     mpc_http_release(mpc_http);
 
     return MPC_ERROR;
@@ -475,8 +483,10 @@ mpc_http_release(mpc_http_t *http)
     ASSERT(http->magic == MPC_HTTP_MAGIC);
 
     if (http->url != NULL) {
-        mpc_url_put(http->url);
-        http->url = NULL;
+        if (http->url->no_put == 0) {
+            mpc_url_put(http->url);
+            http->url = NULL;
+        }
     }
 
     if (http->conn != NULL) {
@@ -660,6 +670,9 @@ parse_body:
 
     http->bench.end = time_us();
 
+    http->ins->cur_concurrent--;
+    ASSERT(http->ins->cur_concurrent >= 0);
+
     if (conn->eof) {
         mpc_log_debug(0, "request over server close connection,"
                          " host: \"%V\" uri: \"%V\"",
@@ -700,7 +713,9 @@ mpc_http_release_url(void *elem, void *data)
 {
     mpc_url_t  *mpc_url = *(mpc_url_t **)elem;
 
-    mpc_url_put(mpc_url);
+    if (mpc_url->no_put == 0) {
+        mpc_url_put(mpc_url);
+    }
 
     return MPC_OK;
 }

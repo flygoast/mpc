@@ -164,6 +164,7 @@ mpc_url_put(mpc_url_t *mpc_url)
 {
     pthread_mutex_lock(&mutex_free);
 
+    ASSERT(mpc_url->no_put == 0);
     ASSERT(STAILQ_NEXT(mpc_url, next) == NULL);
     ASSERT(mpc_url->magic == MPC_URL_MAGIC);
 

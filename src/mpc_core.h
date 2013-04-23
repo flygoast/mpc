@@ -77,6 +77,7 @@ typedef struct mpc_instance_s mpc_instance_t;
 
 #define MPC_DEFAULT_CONF_PATH   "conf/mpc.conf"
 #define MPC_DEFAULT_PORT        17748
+#define MPC_DEFAULT_CONCURRENT  50
 
 #define MPC_OK                  0
 #define MPC_ERROR               -1
@@ -118,7 +119,11 @@ struct mpc_instance_s {
     char                *log_file;
     mpc_event_loop_t    *el;
     int                  self_pipe[2];
+    mpc_array_t         *urls;
+    int                  cur_concurrent;
+    int                  concurrent;
     unsigned             follow_location:1;
+    unsigned             replay:1;
 };
 
 

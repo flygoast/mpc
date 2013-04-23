@@ -39,6 +39,10 @@ static int mpc_core_process_cron(mpc_event_loop_t *el, int64_t id, void *data);
 static void mpc_core_create_submit_thread(mpc_instance_t *ins);
 static void *mpc_core_submit(void *arg);
 static char *mpc_core_getline(char *buf, int size, FILE *fp);
+static int mpc_core_put_url(void *elem, void *data);
+
+
+static int start_bench = 0;
 
 
 static void
@@ -76,6 +80,9 @@ mpc_core_init(mpc_instance_t *ins)
         return MPC_ERROR;
     }
 
+
+    srandom(time(NULL));
+
     return MPC_OK;
 }
 
@@ -88,14 +95,21 @@ mpc_core_deinit(mpc_instance_t *ins)
     mpc_buf_deinit();
     mpc_conn_deinit();
 
-    if (ins->input_filename) {
-        mpc_url_deinit();
-    }
 
     if (ins->el) {
         mpc_free_event_loop(ins->el);
     }
 
+    if (ins->urls) {
+        mpc_array_destroy(ins->urls);
+        mpc_array_each(ins->urls, mpc_core_put_url, NULL);
+    }
+
+    if (ins->input_filename) {
+        mpc_url_deinit();
+    }
+
+    mpc_free(ins);
 
     mpc_signal_deinit();
 
@@ -205,43 +219,101 @@ mpc_core_process_notify(mpc_event_loop_t *el, int fd, void *data, int mask)
             return;
         }
 
-        do {
-            mpc_url = mpc_url_task_get();
-            if (mpc_url == NULL) {
-                MPC_BUG();
-            }
+        if (ins->replay) {
 
-            mpc_http = mpc_http_get();
-            if (mpc_http == NULL) {
-                mpc_log_emerg(0, "oom when get http");
-                exit(1);
-            }
+            do {
+                mpc_url = mpc_url_task_get();
+                if (mpc_url == NULL) {
+                    MPC_BUG();
+                }
+    
+                mpc_http = mpc_http_get();
+                if (mpc_http == NULL) {
+                    mpc_log_emerg(0, "oom when get http");
+                    exit(1);
+                }
+    
+                mpc_http->ins = ins;
+                mpc_http->url = mpc_url;
+    
+                mpc_log_debug(0, "receive http url(%d), "
+                                 "host: \"%V\" uri: \"%V\"",
+                              mpc_url->url_id, &mpc_url->host, &mpc_url->uri);
+    
+                if (mpc_http_process_request(mpc_http) != MPC_OK) {
+                    mpc_log_err(0, "process url \"http://%V%V\" failed, "
+                                   "ignored",
+                                &mpc_url->host, &mpc_url->uri);
+                    mpc_url_put(mpc_url);
+                    mpc_http_put(mpc_http);
+                }
+    
+            } while (--n);
 
-            mpc_http->ins = ins;
-            mpc_http->url = mpc_url;
-
-            mpc_log_debug(0, "receive http url(%d), host: \"%V\" uri: \"%V\"",
-                          mpc_url->url_id, &mpc_url->host, &mpc_url->uri);
-
-            if (mpc_http_process_request(mpc_http) != MPC_OK) {
-                mpc_log_err(0, "process url \"http://%V%V\" failed, ignored",
-                            &mpc_url->host, &mpc_url->uri);
-                mpc_url_put(mpc_url);
-                mpc_http_put(mpc_http);
-            }
-
-        } while (--n);
+        } else {
+            start_bench = 1;
+        }
     }
+}
+
+
+static int
+mpc_core_put_url(void *elem, void *data)
+{
+    mpc_url_t  **mpc_url_p = (mpc_url_t **)elem;
+
+    MPC_NOTUSED(data);
+
+    (*mpc_url_p)->no_put = 0;
+    mpc_url_put(*mpc_url_p);
+
+    return MPC_OK;
 }
 
 
 static int
 mpc_core_process_cron(mpc_event_loop_t *el, int64_t id, void *data)
 {
-    mpc_instance_t  *ins = (mpc_instance_t *)data;
+    mpc_instance_t   *ins = (mpc_instance_t *)data;
+    mpc_http_t       *mpc_http;
+    mpc_url_t        *mpc_url;
+    mpc_url_t       **mpc_url_p;
+    int64_t           idx;
 
-    MPC_NOTUSED(el);
-    MPC_NOTUSED(ins);
+    MPC_NOTUSED(mpc_http);
+
+    if (start_bench) {
+
+        if (ins->cur_concurrent >= ins->concurrent) {
+            return MPC_CRON_INTERVAL;
+        }
+
+        idx = random() % ins->urls->nelem;
+    
+        mpc_url_p = mpc_array_get(ins->urls, idx);
+        ASSERT(mpc_url_p != NULL);
+        mpc_url = *mpc_url_p;
+    
+        mpc_http = mpc_http_get();
+        if (mpc_http == NULL) {
+            mpc_log_emerg(0, "oom when get http");
+            exit(1);
+        }
+    
+        mpc_http->ins = ins;
+        mpc_http->url = mpc_url;
+    
+        mpc_log_debug(0, "receive http url(%d), "
+                         "host: \"%V\" uri: \"%V\"",
+                      mpc_url->url_id, &mpc_url->host, &mpc_url->uri);
+        
+        if (mpc_http_process_request(mpc_http) != MPC_OK) {
+            mpc_log_err(0, "process url \"http://%V%V\" failed, "
+                           "ignored",
+                            &mpc_url->host, &mpc_url->uri);
+            mpc_http_put(mpc_http);
+        }
+    }
 
     return MPC_CRON_INTERVAL;
 }
@@ -261,61 +333,128 @@ mpc_core_submit(void *arg)
     mpc_instance_t *ins = (mpc_instance_t *)arg;
 
     if (ins->input_filename) {
-        FILE      *fp;
-        char      *ptr;
-        char       buf[MPC_CONF_BUF_MAX_SIZE];
-        mpc_url_t *mpc_url;
-        int        len;
-        uint8_t   *p, *last;
+        FILE        *fp;
+        char        *ptr;
+        char         buf[MPC_CONF_BUF_MAX_SIZE];
+        mpc_url_t   *mpc_url;
+        mpc_url_t  **mpc_url_p;
+        int          len;
+        uint8_t     *p, *last;
         
         if ((fp = fopen(ins->input_filename, "r")) == NULL) {
-            mpc_log_stderr(errno, "fopen \"%s\" failed", ins->input_filename);
+            mpc_log_stderr(errno, "fopen \"%s\" failed",
+                           ins->input_filename);
             exit(1);
         }
-            
-        for (;;) {
 
-            ptr = mpc_core_getline(buf, MPC_CONF_BUF_MAX_SIZE, fp);
-
-            if (ptr == NULL) {
-                break;
+        if (ins->replay) {
+            for (;;) {
+                ptr = mpc_core_getline(buf, MPC_CONF_BUF_MAX_SIZE, fp);
+    
+                if (ptr == NULL) {
+                    break;
+                }
+    
+                mpc_url = mpc_url_get();
+    
+                if (mpc_url == NULL) {
+                    mpc_log_emerg(errno, "oom!");
+                    exit(1);
+                }
+    
+                len = strlen(ptr);
+                last = mpc_url->buf + mpc_url->buf_size;
+    
+                p = mpc_slprintf(mpc_url->buf, last, "%s", ptr);
+                if (p == last) {
+                    mpc_url_put(mpc_url);
+                    mpc_log_err(0, "url buf size (%d) too small for \"%s\", "
+                                   "ignored",
+                                   mpc_url->buf_size, ptr);
+                    continue;
+                }
+    
+                if (mpc_http_parse_url(mpc_url->buf, len, mpc_url) != MPC_OK) {
+                    mpc_log_err(0, "parse http url \"%s\" failed, ignored",
+                                ptr);
+                    mpc_url_put(mpc_url);
+                    continue;
+                }
+    
+                mpc_log_debug(0, "parse url (%d), host: \"%V\" uri: \"%V\"",
+                              mpc_url->url_id, &mpc_url->host, &mpc_url->uri);
+    
+                mpc_url_task_insert(mpc_url);
+    
+                if (mpc_core_notify(ins) < 0) {
+                    mpc_log_emerg(errno, "write pipe (%d) failed", 
+                                  ins->self_pipe[1]);
+                    exit(1);
+                }
+                sched_yield();
             }
-
-            mpc_url = mpc_url_get();
-
-            if (mpc_url == NULL) {
+    
+        } else {
+            ins->urls = mpc_array_create(500, sizeof(mpc_url_t *));
+            if (ins->urls == NULL) {
                 mpc_log_emerg(errno, "oom!");
                 exit(1);
             }
 
-            len = strlen(ptr);
-            last = mpc_url->buf + mpc_url->buf_size;
+            for (;;) {
 
-            p = mpc_slprintf(mpc_url->buf, last, "%s", ptr);
-            if (p == last) {
-                mpc_url_put(mpc_url);
-                mpc_log_err(0, "url buf size (%d) too small for \"%s\", "
-                               "ignored",
-                               mpc_url->buf_size, ptr);
-                continue;
+                ptr = mpc_core_getline(buf, MPC_CONF_BUF_MAX_SIZE, fp);
+    
+                if (ptr == NULL) {
+                    break;
+                }
+    
+                mpc_url_p = mpc_array_push(ins->urls);
+                if (mpc_url_p == NULL) {
+                    mpc_log_emerg(errno, "oom!");
+                    exit(1);
+                }
+
+                mpc_url = mpc_url_get();
+   
+                len = strlen(ptr);
+                last = mpc_url->buf + mpc_url->buf_size;
+    
+                p = mpc_slprintf(mpc_url->buf, last, "%s", ptr);
+                if (p == last) {
+                    mpc_url_put(mpc_url);
+                    mpc_array_pop(ins->urls);
+                    mpc_log_err(0, "url buf size (%d) too small for \"%s\", "
+                                   "ignored",
+                                   mpc_url->buf_size, ptr);
+                    continue;
+                }
+    
+                if (mpc_http_parse_url(mpc_url->buf, len, mpc_url) != MPC_OK) {
+                    mpc_url_put(mpc_url);
+                    mpc_array_pop(ins->urls);
+                    mpc_log_err(0, "parse http url \"%s\" failed, ignored",
+                                ptr);
+                    continue;
+                }
+    
+                mpc_log_debug(0, "parse url (%d), host: \"%V\" uri: \"%V\"",
+                              mpc_url->url_id, &mpc_url->host, &mpc_url->uri);
+                mpc_url->no_put = 1;
+                *mpc_url_p = mpc_url;
             }
 
-            if (mpc_http_parse_url(mpc_url->buf, len, mpc_url) != MPC_OK) {
-                mpc_log_err(0, "parse http url \"%s\" failed, ignored", ptr);
-                mpc_url_put(mpc_url);
-                continue;
+            if (ins->urls->nelem == 0) {
+                mpc_log_stderr(0, "no url in vector");
+                exit(1);
             }
-
-            mpc_log_debug(0, "parse url (%d), host: \"%V\" uri: \"%V\"",
-                          mpc_url->url_id, &mpc_url->host, &mpc_url->uri);
-
-            mpc_url_task_insert(mpc_url);
 
             if (mpc_core_notify(ins) < 0) {
                 mpc_log_emerg(errno, "write pipe (%d) failed", 
                               ins->self_pipe[1]);
                 exit(1);
             }
+
             sched_yield();
         }
 

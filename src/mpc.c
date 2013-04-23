@@ -51,11 +51,12 @@ static struct option long_options[] = {
     { "file",       required_argument,  NULL,   'f' },
     { "addr",       required_argument,  NULL,   'a' },
     { "port",       required_argument,  NULL,   'p' },
+    { "concurrent", required_argument,  NULL,   'C' },
     { NULL,         0,                  NULL,    0  }
 };
 
 
-static char *short_options = "hvtdFrl:L:c:f:a:p:";
+static char *short_options = "hvtdFrl:L:c:f:a:p:C:";
 
 
 static int
@@ -132,6 +133,20 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
             }
             break;
 
+        case 'C':
+            ins->concurrent = mpc_atoi((uint8_t *)optarg, strlen(optarg));
+            if (ins->concurrent == MPC_ERROR) {
+                mpc_log_stderr(0, "option '-C' requires a number");
+                return MPC_ERROR;
+            }
+
+            if (ins->concurrent < 1) {
+                mpc_log_stderr(0, "option '-C' value must be positive",
+                               ins->concurrent); 
+                return MPC_ERROR;
+            }
+            break;
+
         case '?':
             switch (optopt) {
             case 'f':
@@ -183,6 +198,9 @@ mpc_set_default_option(mpc_instance_t *ins)
     ins->input_filename = NULL;
     ins->addr = NULL;
     ins->port = MPC_DEFAULT_PORT;
+    ins->urls = NULL;
+    ins->cur_concurrent = 0;
+    ins->concurrent = MPC_DEFAULT_CONCURRENT;
 
     ins->follow_location = 0;
     ins->replay = 0;
