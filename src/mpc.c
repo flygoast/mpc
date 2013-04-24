@@ -36,27 +36,28 @@ static int   show_help;
 static int   show_version;
 static int   test_conf;
 static int   daemonize;
+static mpc_instance_t   *mpc_ins;
 
 
 static struct option long_options[] = {
-    { "help",       no_argument,        NULL,   'h' },
-    { "version",    no_argument,        NULL,   'v' },
-    { "test",       no_argument,        NULL,   't' },
-    { "daemon",     no_argument,        NULL,   'd' },
-    { "follow",     no_argument,        NULL,   'F' },
-    { "replay",     no_argument,        NULL,   'r' },
-    { "log",        required_argument,  NULL,   'l' },
-    { "level",      required_argument,  NULL,   'L' },
-    { "conf",       required_argument,  NULL,   'c' },
-    { "file",       required_argument,  NULL,   'f' },
-    { "addr",       required_argument,  NULL,   'a' },
-    { "port",       required_argument,  NULL,   'p' },
-    { "concurrent", required_argument,  NULL,   'C' },
-    { NULL,         0,                  NULL,    0  }
+    { "help",        no_argument,        NULL,   'h' },
+    { "version",     no_argument,        NULL,   'v' },
+    { "test",        no_argument,        NULL,   't' },
+    { "daemon",      no_argument,        NULL,   'd' },
+    { "follow",      no_argument,        NULL,   'F' },
+    { "replay",      no_argument,        NULL,   'r' },
+    { "log",         required_argument,  NULL,   'l' },
+    { "level",       required_argument,  NULL,   'L' },
+    { "conf",        required_argument,  NULL,   'C' },
+    { "file",        required_argument,  NULL,   'f' },
+    { "addr",        required_argument,  NULL,   'a' },
+    { "port",        required_argument,  NULL,   'p' },
+    { "concurrency", required_argument,  NULL,   'c' },
+    { NULL,          0,                  NULL,    0  }
 };
 
 
-static char *short_options = "hvtdFrl:L:c:f:a:p:C:";
+static char *short_options = "hvtdFrl:L:C:f:a:p:c:";
 
 
 static int
@@ -95,7 +96,7 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
             ins->replay = 1;
             break;
 
-        case 'c':
+        case 'C':
             ins->conf_filename = optarg;
             break;
 
@@ -133,16 +134,16 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
             }
             break;
 
-        case 'C':
-            ins->concurrent = mpc_atoi((uint8_t *)optarg, strlen(optarg));
-            if (ins->concurrent == MPC_ERROR) {
+        case 'c':
+            ins->concurrency = mpc_atoi((uint8_t *)optarg, strlen(optarg));
+            if (ins->concurrency == MPC_ERROR) {
                 mpc_log_stderr(0, "option '-C' requires a number");
                 return MPC_ERROR;
             }
 
-            if (ins->concurrent < 1) {
+            if (ins->concurrency < 1) {
                 mpc_log_stderr(0, "option '-C' value must be positive",
-                               ins->concurrent); 
+                               ins->concurrency); 
                 return MPC_ERROR;
             }
             break;
@@ -178,9 +179,21 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
 
 
 static void
-mpc_show_usage()
+mpc_show_usage(void)
 {
-
+    printf("Usage: mpc [-?hvtdFr] [-l log file] [-L log level] " CRLF
+           "           [-c concurrency]" CRLF
+           CRLF
+           "Options:" CRLF
+           "  -h, --help            : this help" CRLF
+           "  -v, --version         : show version and exit" CRLF
+           "  -t, --test-conf       : test configuration syntax and exit" CRLF
+           "  -F, --follow          : follow 302 redirect" CRLF
+           "  -r, --replay          : replay a url file" CRLF
+           "  -l, --log=S           : log file" CRLF
+           "  -L, --level=S         : log level" CRLF
+           "  -c, --concurrency=N   : concurrency" CRLF
+           CRLF);
 }
 
 
@@ -199,8 +212,7 @@ mpc_set_default_option(mpc_instance_t *ins)
     ins->addr = NULL;
     ins->port = MPC_DEFAULT_PORT;
     ins->urls = NULL;
-    ins->cur_concurrent = 0;
-    ins->concurrent = MPC_DEFAULT_CONCURRENT;
+    ins->concurrency = MPC_DEFAULT_CONCURRENT;
 
     ins->follow_location = 0;
     ins->replay = 0;
@@ -217,29 +229,31 @@ int
 main(int argc, char **argv)
 {
     int              rc;
-    mpc_instance_t  *ins;
 
-    ins = (mpc_instance_t *)mpc_calloc(sizeof(mpc_instance_t), 1);
-    if (ins == NULL) {
+    mpc_ins = (mpc_instance_t *)mpc_calloc(sizeof(mpc_instance_t), 1);
+    if (mpc_ins == NULL) {
         mpc_log_stderr(errno, "oom!");
         exit(1);
     }
     
-    mpc_set_default_option(ins);
+    mpc_set_default_option(mpc_ins);
 
-    rc = mpc_get_options(argc, argv, ins);
+    mpc_ins->stat = mpc_stat_create();
+    if (mpc_ins->stat == NULL) {
+        mpc_log_stderr(errno, "oom!");
+        exit(1);
+    }
+
+    rc = mpc_get_options(argc, argv, mpc_ins);
     if (rc != MPC_OK) {
         mpc_show_usage();
         exit(1);
     }
 
     if (show_version) {
-        mpc_log_stderr(0, "mpc: Multiple Protocol Client" CRLF
-                          "Version: %s" CRLF
-                          "Copyright (c) 2013, "
-                          "FengGu, <flygoast@gmail.com>" CRLF
-                          "Repo: https://github.com/flygoast/mpc",
-                          MPC_VERSION_STR);
+        printf("mpc: Multiple Protocol Client" CRLF
+               "Version: %s" CRLF,
+               MPC_VERSION_STR);
 
         if (show_help) {
             mpc_show_usage();
@@ -255,17 +269,32 @@ main(int argc, char **argv)
         exit(0);
     }
 
-    if (mpc_core_init(ins) != MPC_OK) {
+    if (mpc_core_init(mpc_ins) != MPC_OK) {
         exit(1);
     }
 
-    if (mpc_core_run(ins) != MPC_OK) {
+    if (mpc_core_run(mpc_ins) != MPC_OK) {
         exit(1);
     }
 
-    if (mpc_core_deinit(ins) != MPC_OK) {
+    if (mpc_core_deinit(mpc_ins) != MPC_OK) {
+        printf("here\n");
         exit(1);
     }
+
+    mpc_stat_print(mpc_ins->stat);
+
+    mpc_stat_destroy(mpc_ins->stat);
+
+    mpc_free(mpc_ins);
 
     exit(0);
+}
+
+
+void
+mpc_stop()
+{
+    mpc_ins->stat->stop = time_us();
+    mpc_event_stop(mpc_ins->el, 0);
 }

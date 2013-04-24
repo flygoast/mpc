@@ -38,6 +38,7 @@ static int              mpc_url_id;
 static uint32_t         mpc_http_nfree;
 static mpc_http_hdr_t   mpc_http_free_queue;
 static uint32_t         mpc_http_max_nfree;
+static uint32_t         mpc_http_used;
 
 
 #ifdef WITH_MPC_RESOLVER
@@ -118,10 +119,19 @@ mpc_http_reset(mpc_http_t *http)
 }
 
 
+uint32_t
+mpc_http_get_used(void)
+{
+    return mpc_http_used;
+}
+
+
 mpc_http_t *
 mpc_http_get(void)
 {
     mpc_http_t *http;
+
+    mpc_http_used++;
 
     if (!TAILQ_EMPTY(&mpc_http_free_queue)) {
         ASSERT(mpc_http_nfree > 0);
@@ -156,6 +166,8 @@ mpc_http_free(mpc_http_t *http)
 void
 mpc_http_put(mpc_http_t *http)
 {
+    mpc_http_used--;
+
     mpc_http_reset(http);
     if (mpc_http_max_nfree != 0 && mpc_http_nfree + 1 > mpc_http_max_nfree) {
         mpc_http_free(http);
@@ -172,6 +184,7 @@ mpc_http_init(uint32_t max_nfree)
 {
     mpc_http_max_nfree = max_nfree;
     mpc_http_nfree = 0;
+    mpc_http_used = 0;
     TAILQ_INIT(&mpc_http_free_queue);
 }
 
@@ -380,8 +393,6 @@ mpc_http_create_request(char *addr, mpc_http_t *mpc_http)
     conn = NULL;
     sockfd = -1;
 
-    mpc_http->ins->cur_concurrent++;
-
     if (mpc_http->conn == NULL) {
         mpc_http->conn = mpc_conn_get();
         if (mpc_http->conn == NULL) {
@@ -466,10 +477,6 @@ mpc_http_create_request(char *addr, mpc_http_t *mpc_http)
     return MPC_OK;
 
 failed:
-
-    mpc_http->ins->cur_concurrent--;
-
-    ASSERT(mpc_http->ins->cur_concurrent >= 0);
 
     mpc_http_release(mpc_http);
 
@@ -565,6 +572,7 @@ mpc_http_process_response(mpc_event_loop_t *el, int fd, void *data, int mask)
     mpc_url_t   **url_index;
     int           n;
     int           rc;
+    uint64_t      elapsed;
 
     http->bench.first_packet_reach = time_us();
 
@@ -587,6 +595,9 @@ mpc_http_process_response(mpc_event_loop_t *el, int fd, void *data, int mask)
     if (n == 0) {
         return;
     }
+
+    /* record statistics */
+    mpc_stat_inc_bytes(http->ins->stat, n);
 
     if (http->buf == NULL) {
         http->buf = STAILQ_FIRST(&http->conn->rcv_buf_queue);
@@ -670,9 +681,6 @@ parse_body:
 
     http->bench.end = time_us();
 
-    http->ins->cur_concurrent--;
-    ASSERT(http->ins->cur_concurrent >= 0);
-
     if (conn->eof) {
         mpc_log_debug(0, "request over server close connection,"
                          " host: \"%V\" uri: \"%V\"",
@@ -686,6 +694,22 @@ parse_body:
     close(http->conn->fd);
     http->conn->fd = -1;
     mpc_delete_file_event(el, fd, MPC_READABLE);
+
+    /* record statistics */
+    elapsed = http->bench.end - http->bench.start;
+    mpc_stat_set_longest(http->ins->stat, elapsed);
+    mpc_stat_set_shortest(http->ins->stat, elapsed);
+    mpc_stat_inc_total_time(http->ins->stat, elapsed);
+
+    if (http->status.code != 200 && http->status.code != 302
+        && http->status.code != 404)
+    {
+        mpc_stat_inc_failed(http->ins->stat);
+    } else {
+        mpc_stat_inc_ok(http->ins->stat);
+    }
+
+    mpc_http_create_missing_requests(http->ins);
 
     if (http->ins->follow_location && http->need_redirect) {
         url_index = (mpc_url_t **)mpc_array_top(http->locations);
@@ -1340,4 +1364,56 @@ mpc_http_discard_body(mpc_http_t *http)
     }
 
     return MPC_AGAIN;
+}
+
+
+void
+mpc_http_create_missing_requests(mpc_instance_t *ins)
+{
+    mpc_http_t   *mpc_http;
+    mpc_url_t    *mpc_url;
+    mpc_url_t   **mpc_url_p;
+    int64_t       idx;
+    int           n;
+    uint32_t      concurrency;
+
+    concurrency = mpc_http_get_used();
+    
+    printf("concurrency: %d:%d\n", concurrency, ins->concurrency);
+
+    if (concurrency >= (uint32_t)(ins->concurrency * 1.5)) {
+        return;
+    }
+
+    n = (uint32_t)(ins->concurrency * 1.5) - concurrency;
+
+    ASSERT(n > 0);
+
+    while(n--) {
+        idx = random() % ins->urls->nelem;
+    
+        mpc_url_p = mpc_array_get(ins->urls, idx);
+        ASSERT(mpc_url_p != NULL);
+        mpc_url = *mpc_url_p;
+    
+        mpc_http = mpc_http_get();
+        if (mpc_http == NULL) {
+            mpc_log_emerg(0, "oom when get http");
+            exit(1);
+        }
+    
+        mpc_http->ins = ins;
+        mpc_http->url = mpc_url;
+    
+        mpc_log_debug(0, "receive http url(%d), "
+                         "host: \"%V\" uri: \"%V\"",
+                      mpc_url->url_id, &mpc_url->host, &mpc_url->uri);
+        
+        if (mpc_http_process_request(mpc_http) != MPC_OK) {
+            mpc_log_err(0, "process url \"http://%V%V\" failed, "
+                           "ignored",
+                            &mpc_url->host, &mpc_url->uri);
+            mpc_http_put(mpc_http);
+        }
+    }
 }

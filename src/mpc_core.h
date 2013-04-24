@@ -54,6 +54,7 @@
 
 
 typedef struct mpc_instance_s mpc_instance_t;
+typedef struct mpc_stat_s mpc_stat_t;
 
 
 #include <mpc_signal.h>
@@ -69,6 +70,7 @@ typedef struct mpc_instance_s mpc_instance_t;
 #include <mpc_buf.h>
 #include <mpc_connection.h>
 #include <mpc_http.h>
+#include <mpc_stat.h>
 
 
 #define MPC_VERSION_NUM         1           /* aabbbccc */
@@ -120,13 +122,13 @@ struct mpc_instance_s {
     mpc_event_loop_t    *el;
     int                  self_pipe[2];
     mpc_array_t         *urls;
-    int                  cur_concurrent;
-    int                  concurrent;
+    int                  concurrency;
+    mpc_stat_t          *stat;
     unsigned             follow_location:1;
     unsigned             replay:1;
 };
 
-
+void mpc_stop();
 int mpc_core_init(mpc_instance_t *ins);
 int mpc_core_run(mpc_instance_t *ins);
 int mpc_core_deinit(mpc_instance_t *ins);

@@ -140,7 +140,7 @@ mpc_signal_handler(int signo)
     }
 
     if (done) {
-        exit(1);
+        mpc_stop();
     }
 }
 
@@ -161,7 +161,7 @@ mpc_backtrace(int skip_count)
     skip_count++; /* skip the current frame also */
 
     for (i = skip_count, j = 0;  i < size; i++, j++) {
-        /* TODO log */
+        mpc_log_emerg(0, "[%d] %s", j, symbols[j]);
     }
 
     free(symbols);

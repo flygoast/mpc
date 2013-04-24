@@ -41,6 +41,9 @@
 #define MPC_MAX_INT32_VALUE     (uint32_t)0x7fffffff
 #define MPC_MAX_UINT32_VALUE    (uint32_t)0xffffffff
 
+#define MPC_MAX_INT64_VALUE     (uint64_t)0x7fffffffffffffffLL
+#define MPC_MAX_UINT64_VALUE    (uint64_t)0xffffffffffffffffLL
+
 /* True if negative values of the signed integer type T uses two's
  * complement, one's complement, or signed magnitude representation,
  * respectively. */

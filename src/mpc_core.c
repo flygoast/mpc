@@ -95,21 +95,18 @@ mpc_core_deinit(mpc_instance_t *ins)
     mpc_buf_deinit();
     mpc_conn_deinit();
 
-
     if (ins->el) {
         mpc_free_event_loop(ins->el);
     }
 
     if (ins->urls) {
-        mpc_array_destroy(ins->urls);
         mpc_array_each(ins->urls, mpc_core_put_url, NULL);
+        mpc_array_destroy(ins->urls);
     }
 
     if (ins->input_filename) {
         mpc_url_deinit();
     }
-
-    mpc_free(ins);
 
     mpc_signal_deinit();
 
@@ -220,6 +217,10 @@ mpc_core_process_notify(mpc_event_loop_t *el, int fd, void *data, int mask)
         }
 
         if (ins->replay) {
+            if (ins->stat->start == 0) {
+                printf("start mpc\n");
+                ins->stat->start = time_us();
+            }
 
             do {
                 mpc_url = mpc_url_task_get();
@@ -252,6 +253,8 @@ mpc_core_process_notify(mpc_event_loop_t *el, int fd, void *data, int mask)
 
         } else {
             start_bench = 1;
+            printf("start mpc\n");
+            ins->stat->start = time_us();
         }
     }
 }
@@ -275,44 +278,9 @@ static int
 mpc_core_process_cron(mpc_event_loop_t *el, int64_t id, void *data)
 {
     mpc_instance_t   *ins = (mpc_instance_t *)data;
-    mpc_http_t       *mpc_http;
-    mpc_url_t        *mpc_url;
-    mpc_url_t       **mpc_url_p;
-    int64_t           idx;
-
-    MPC_NOTUSED(mpc_http);
 
     if (start_bench) {
-
-        if (ins->cur_concurrent >= ins->concurrent) {
-            return MPC_CRON_INTERVAL;
-        }
-
-        idx = random() % ins->urls->nelem;
-    
-        mpc_url_p = mpc_array_get(ins->urls, idx);
-        ASSERT(mpc_url_p != NULL);
-        mpc_url = *mpc_url_p;
-    
-        mpc_http = mpc_http_get();
-        if (mpc_http == NULL) {
-            mpc_log_emerg(0, "oom when get http");
-            exit(1);
-        }
-    
-        mpc_http->ins = ins;
-        mpc_http->url = mpc_url;
-    
-        mpc_log_debug(0, "receive http url(%d), "
-                         "host: \"%V\" uri: \"%V\"",
-                      mpc_url->url_id, &mpc_url->host, &mpc_url->uri);
-        
-        if (mpc_http_process_request(mpc_http) != MPC_OK) {
-            mpc_log_err(0, "process url \"http://%V%V\" failed, "
-                           "ignored",
-                            &mpc_url->host, &mpc_url->uri);
-            mpc_http_put(mpc_http);
-        }
+        mpc_http_create_missing_requests(ins);
     }
 
     return MPC_CRON_INTERVAL;

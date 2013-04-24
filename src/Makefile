@@ -4,7 +4,7 @@ DEBUG = -g 						\
 CC = gcc
 CFLAGS = $(DEBUG)  -Wall -Werror
 INC = -I .
-LIB = -lpthread -lcares
+LIB = -L /home/fenggu/slib -lpthread -lcares -lrt
 OO = mpc.o 				\
 	 mpc_core.o			\
 	 mpc_signal.o		\
@@ -17,7 +17,8 @@ OO = mpc.o 				\
 	 mpc_url.o			\
 	 mpc_buf.o 			\
 	 mpc_connection.o 	\
-	 mpc_http.o
+	 mpc_http.o			\
+	 mpc_stat.o
 	 
 TARGETS = mpc
 

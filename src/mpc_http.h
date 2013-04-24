@@ -69,10 +69,6 @@ typedef struct {
 } mpc_http_bench_t;
 
 
-typedef struct {
-
-} mpc_http_stat_t;
-
 struct mpc_http_s {
 #ifdef WITH_DEBUG
     uint32_t                 magic;
@@ -96,7 +92,6 @@ struct mpc_http_s {
     uint8_t                 *header_end;
     int                      content_length_n;
     int                      content_length_received;
-
     mpc_http_bench_t         bench;
     unsigned                 need_redirect:1;
 };
@@ -111,6 +106,7 @@ mpc_http_t *mpc_http_get();
 void mpc_http_put(mpc_http_t *mpc_http);
 int mpc_http_parse_url(uint8_t *url, size_t n, mpc_url_t *mpc_url);
 int mpc_http_process_request(mpc_http_t *http);
+void mpc_http_create_missing_requests(mpc_instance_t *ins);
 
 
 #endif /* __MPC_HTTP_H_INCLUDED__ */
