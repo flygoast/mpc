@@ -9,6 +9,7 @@ OO = mpc.o 				\
 	 mpc_core.o			\
 	 mpc_signal.o		\
 	 mpc_util.o 		\
+	 mpc_rbtree.o 		\
 	 mpc_string.o 		\
 	 mpc_log.o 			\
 	 mpc_array.o 		\

@@ -60,6 +60,7 @@ typedef struct mpc_stat_s mpc_stat_t;
 #include <mpc_signal.h>
 #include <mpc_queue.h>
 #include <mpc_string.h>
+#include <mpc_rbtree.h>
 #include <mpc_log.h>
 #include <mpc_array.h>
 #include <mpc_alloc.h>
@@ -127,10 +128,13 @@ struct mpc_instance_s {
     int                  concurrency;
     mpc_stat_t          *stat;
     struct sockaddr_in   dst_addr;
+    mpc_rbtree_t         http_rbtree;
+    mpc_rbnode_t         root;
     unsigned             follow_location:1;
     unsigned             replay:1;
     unsigned             use_dst_addr;
 };
+
 
 void mpc_stop();
 int mpc_core_init(mpc_instance_t *ins);
