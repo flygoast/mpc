@@ -40,9 +40,13 @@ static void mpc_core_create_submit_thread(mpc_instance_t *ins);
 static void *mpc_core_submit(void *arg);
 static char *mpc_core_getline(char *buf, int size, FILE *fp);
 static int mpc_core_put_url(void *elem, void *data);
+static int mpc_core_notify(mpc_instance_t *ins);
+static void mpc_core_notify_end(mpc_instance_t *ins);
 
 
 static int start_bench = 0;
+static uint32_t mpc_task_total = 0;
+static uint32_t mpc_task_processed = 0;
 
 
 static void
@@ -79,7 +83,6 @@ mpc_core_init(mpc_instance_t *ins)
         mpc_log_emerg(0, "create event loop failed");
         return MPC_ERROR;
     }
-
 
     srandom(time(NULL));
 
@@ -191,6 +194,7 @@ mpc_core_process_notify(mpc_event_loop_t *el, int fd, void *data, int mask)
     mpc_url_t       *mpc_url;
     mpc_instance_t  *ins = (mpc_instance_t *)data;
     mpc_http_t      *mpc_http;
+    uint32_t         count;
 
     for (;;) {
 
@@ -210,9 +214,13 @@ mpc_core_process_notify(mpc_event_loop_t *el, int fd, void *data, int mask)
         }
 
         if (n == 0) {
-            mpc_log_err(0, "write pipe (%d) closed abnormally");
+            //mpc_log_err(0, "pipe write end abnormal closed");
+            if (ins->stat->stop == 0) {
+                ins->stat->stop = time_us();
+            }
+
             mpc_delete_file_event(el, fd, MPC_READABLE);
-            mpc_event_stop(el, MPC_ERROR);
+            mpc_event_stop(el, 0);
             return;
         }
 
@@ -222,10 +230,10 @@ mpc_core_process_notify(mpc_event_loop_t *el, int fd, void *data, int mask)
                 ins->stat->start = time_us();
             }
 
-            do {
+            while (mpc_http_get_used() < ins->concurrency) {
                 mpc_url = mpc_url_task_get();
                 if (mpc_url == NULL) {
-                    MPC_BUG();
+                    break;
                 }
     
                 mpc_http = mpc_http_get();
@@ -234,6 +242,8 @@ mpc_core_process_notify(mpc_event_loop_t *el, int fd, void *data, int mask)
                     exit(1);
                 }
     
+                mpc_task_processed++;
+
                 mpc_http->ins = ins;
                 mpc_http->url = mpc_url;
     
@@ -248,9 +258,14 @@ mpc_core_process_notify(mpc_event_loop_t *el, int fd, void *data, int mask)
                     mpc_url_put(mpc_url);
                     mpc_http_put(mpc_http);
                 }
-    
-            } while (--n);
+            }
 
+            count = __sync_fetch_and_add(&mpc_task_total, 0);
+
+            if (count == mpc_task_processed && mpc_http_get_used() == 0) {
+                mpc_core_notify_end(ins);
+            }
+    
         } else {
             start_bench = 1;
             printf("start mpc\n");
@@ -279,8 +294,13 @@ mpc_core_process_cron(mpc_event_loop_t *el, int64_t id, void *data)
 {
     mpc_instance_t   *ins = (mpc_instance_t *)data;
 
-    if (start_bench) {
-        mpc_http_create_missing_requests(ins);
+    if (ins->replay) {
+        mpc_core_notify(ins);
+
+    } else {
+        if (start_bench) {
+            mpc_http_create_missing_requests(ins);
+        }
     }
 
     return MPC_CRON_INTERVAL;
@@ -292,6 +312,14 @@ mpc_core_notify(mpc_instance_t *ins)
 {
     char c = 'x';
     return write(ins->self_pipe[1], &c, 1);
+}
+
+
+static void
+mpc_core_notify_end(mpc_instance_t *ins)
+{
+    close(ins->self_pipe[1]);
+    ins->self_pipe[1] = -1;
 }
 
 
@@ -308,6 +336,7 @@ mpc_core_submit(void *arg)
         mpc_url_t  **mpc_url_p;
         int          len;
         uint8_t     *p, *last;
+        uint32_t     n = 0;
         
         if ((fp = fopen(ins->input_filename, "r")) == NULL) {
             mpc_log_stderr(errno, "fopen \"%s\" failed",
@@ -359,8 +388,11 @@ mpc_core_submit(void *arg)
                                   ins->self_pipe[1]);
                     exit(1);
                 }
+                n++;
                 sched_yield();
             }
+
+            __sync_add_and_fetch(&mpc_task_total, n);
     
         } else {
             ins->urls = mpc_array_create(500, sizeof(mpc_url_t *));

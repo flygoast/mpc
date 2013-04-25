@@ -137,13 +137,15 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
         case 'c':
             ins->concurrency = mpc_atoi((uint8_t *)optarg, strlen(optarg));
             if (ins->concurrency == MPC_ERROR) {
-                mpc_log_stderr(0, "option '-C' requires a number");
+                mpc_log_stderr(0, "option '-c' requires a number");
                 return MPC_ERROR;
             }
 
-            if (ins->concurrency < 1) {
-                mpc_log_stderr(0, "option '-C' value must be positive",
-                               ins->concurrency); 
+            if (ins->concurrency < 1 
+                || ins->concurrency > MPC_MAX_CONCURRENCY)
+            {
+                mpc_log_stderr(0, "option '-c' value must be between 1 and %u",
+                               MPC_MAX_CONCURRENCY); 
                 return MPC_ERROR;
             }
             break;
@@ -151,7 +153,7 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
         case '?':
             switch (optopt) {
             case 'f':
-            case 'c':
+            case 'C':
             case 'l':
                 mpc_log_stderr(0, "option -%c requires a file name", optopt);
                 break;
@@ -182,12 +184,13 @@ static void
 mpc_show_usage(void)
 {
     printf("Usage: mpc [-?hvtdFr] [-l log file] [-L log level] " CRLF
-           "           [-c concurrency]" CRLF
+           "           [-c concurrency] [-f url file]" CRLF
            CRLF
            "Options:" CRLF
            "  -h, --help            : this help" CRLF
            "  -v, --version         : show version and exit" CRLF
            "  -t, --test-conf       : test configuration syntax and exit" CRLF
+           "  -f, --file            : url files" CRLF
            "  -F, --follow          : follow 302 redirect" CRLF
            "  -r, --replay          : replay a url file" CRLF
            "  -l, --log=S           : log file" CRLF
@@ -212,7 +215,7 @@ mpc_set_default_option(mpc_instance_t *ins)
     ins->addr = NULL;
     ins->port = MPC_DEFAULT_PORT;
     ins->urls = NULL;
-    ins->concurrency = MPC_DEFAULT_CONCURRENT;
+    ins->concurrency = MPC_DEFAULT_CONCURRENCY;
 
     ins->follow_location = 0;
     ins->replay = 0;
@@ -278,7 +281,6 @@ main(int argc, char **argv)
     }
 
     if (mpc_core_deinit(mpc_ins) != MPC_OK) {
-        printf("here\n");
         exit(1);
     }
 

@@ -709,7 +709,9 @@ parse_body:
         mpc_stat_inc_ok(http->ins->stat);
     }
 
-    mpc_http_create_missing_requests(http->ins);
+    if (http->ins->urls != NULL) {
+        mpc_http_create_missing_requests(http->ins);
+    }
 
     if (http->ins->follow_location && http->need_redirect) {
         url_index = (mpc_url_t **)mpc_array_top(http->locations);

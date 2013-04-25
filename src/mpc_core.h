@@ -79,7 +79,8 @@ typedef struct mpc_stat_s mpc_stat_t;
 
 #define MPC_DEFAULT_CONF_PATH   "conf/mpc.conf"
 #define MPC_DEFAULT_PORT        17748
-#define MPC_DEFAULT_CONCURRENT  50
+#define MPC_DEFAULT_CONCURRENCY 50
+#define MPC_MAX_CONCURRENCY     10000
 
 #define MPC_OK                  0
 #define MPC_ERROR               -1

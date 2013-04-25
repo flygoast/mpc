@@ -107,6 +107,7 @@ void mpc_http_put(mpc_http_t *mpc_http);
 int mpc_http_parse_url(uint8_t *url, size_t n, mpc_url_t *mpc_url);
 int mpc_http_process_request(mpc_http_t *http);
 void mpc_http_create_missing_requests(mpc_instance_t *ins);
+uint32_t mpc_http_get_used(void);
 
 
 #endif /* __MPC_HTTP_H_INCLUDED__ */
