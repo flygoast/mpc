@@ -28,6 +28,9 @@
  */
 
 
+#include <mpc_core.h>
+
+
 void
 mpc_rbnode_init(mpc_rbnode_t *node)
 {
@@ -55,7 +58,7 @@ mpc_rbnode_min(mpc_rbnode_t *node, mpc_rbnode_t *sentinel)
 {
     /* traverse left links */
     while (node->left != sentinel) {
-        node->node->left;
+        node = node->left;
     }
 
     return node;
@@ -235,7 +238,7 @@ mpc_rbtree_delete(mpc_rbtree_t *tree, mpc_rbnode_t *node)
         subst = node;
 
     } else {
-        subst = mpc_rbtree_node_min(node->right, sentinel);
+        subst = mpc_rbnode_min(node->right, sentinel);
         if (subst->left != sentinel) {
             temp = subst->left;
         } else {
@@ -271,7 +274,7 @@ mpc_rbtree_delete(mpc_rbtree_t *tree, mpc_rbnode_t *node)
         subst->left = node->left;
         subst->right = node->right;
         subst->parent = node->parent;
-        mpc_rbtree_color(subst, node);
+        mpc_rbtree_copy_color(subst, node);
 
         if (node == *root) {
             *root = subst;

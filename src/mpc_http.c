@@ -485,6 +485,9 @@ mpc_http_create_request(char *addr, mpc_http_t *mpc_http)
         goto failed;
     }
 
+    TAILQ_INSERT_HEAD(&mpc_http->ins->http_hdr, mpc_http, next);
+    mpc_http->ins->http_count++;
+
     return MPC_OK;
 
 failed:
@@ -739,6 +742,9 @@ parse_body:
 
         return;
     }
+
+    TAILQ_REMOVE(&http->ins->http_hdr, http, next);
+    http->ins->http_count--;
 
     mpc_http_release(http);
     return;

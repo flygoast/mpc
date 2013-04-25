@@ -128,8 +128,8 @@ struct mpc_instance_s {
     int                  concurrency;
     mpc_stat_t          *stat;
     struct sockaddr_in   dst_addr;
-    mpc_rbtree_t         http_rbtree;
-    mpc_rbnode_t         root;
+    mpc_http_hdr_t       http_hdr;
+    uint32_t             http_count;
     unsigned             follow_location:1;
     unsigned             replay:1;
     unsigned             use_dst_addr;

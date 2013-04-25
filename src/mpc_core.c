@@ -230,7 +230,7 @@ mpc_core_process_notify(mpc_event_loop_t *el, int fd, void *data, int mask)
                 ins->stat->start = time_us();
             }
 
-            while (mpc_http_get_used() < ins->concurrency) {
+            while (ins->http_count < ins->concurrency) {
                 mpc_url = mpc_url_task_get();
                 if (mpc_url == NULL) {
                     break;
@@ -262,7 +262,7 @@ mpc_core_process_notify(mpc_event_loop_t *el, int fd, void *data, int mask)
 
             count = __sync_fetch_and_add(&mpc_task_total, 0);
 
-            if (count == mpc_task_processed && mpc_http_get_used() == 0) {
+            if (count == mpc_task_processed && ins->http_count == 0) {
                 mpc_core_notify_end(ins);
             }
     
@@ -293,6 +293,8 @@ static int
 mpc_core_process_cron(mpc_event_loop_t *el, int64_t id, void *data)
 {
     mpc_instance_t   *ins = (mpc_instance_t *)data;
+
+    printf("%d\n", ins->http_count);
 
     if (ins->replay) {
         mpc_core_notify(ins);

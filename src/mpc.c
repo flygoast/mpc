@@ -237,7 +237,8 @@ mpc_set_default_option(mpc_instance_t *ins)
     ins->urls = NULL;
     ins->concurrency = MPC_DEFAULT_CONCURRENCY;
 
-    mpc_rbtree_init(&ins->http_rbtree, &ins->root);
+    ins->http_count = 0;
+    TAILQ_INIT(&ins->http_hdr);
 
     ins->follow_location = 0;
     ins->replay = 0;

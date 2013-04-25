@@ -49,7 +49,7 @@ struct mpc_rbnode_s {
     int64_t         key;        /* key for ordering */
     void           *data;       /* opaque data */
     uint8_t         color;      /* red | black */
-}
+};
 
 
 typedef struct {
