@@ -101,16 +101,16 @@ mpc_stat_get_response_time(mpc_stat_t *mpc_stat)
 static double
 mpc_stat_get_transaction_rate(mpc_stat_t *mpc_stat)
 {
-    return (mpc_stat->ok + mpc_stat->failed) * 1000 * 1000 / 
-           (double)(mpc_stat->stop - mpc_stat->start);
+    return (mpc_stat->ok + mpc_stat->failed) / 
+           (double)((mpc_stat->stop - mpc_stat->start) / 1000 / 1000);
 }
 
 
 static double
 mpc_stat_get_throughput(mpc_stat_t *mpc_stat)
 {
-    return (mpc_stat->bytes * 1000 * 1000) / 
-           (double)((mpc_stat->stop - mpc_stat->start) * 1024 * 1024);
+    return ((mpc_stat->bytes / 1024 / 1024)) / 
+           (double)((mpc_stat->stop - mpc_stat->start) / 1000 / 1000);
 }
 
 

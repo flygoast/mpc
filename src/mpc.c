@@ -39,6 +39,9 @@ static int   daemonize;
 static mpc_instance_t   *mpc_ins;
 
 
+static void mpc_rlimit_reset();
+
+
 static struct option long_options[] = {
     { "help",        no_argument,        NULL,   'h' },
     { "version",     no_argument,        NULL,   'v' },
@@ -52,18 +55,20 @@ static struct option long_options[] = {
     { "file",        required_argument,  NULL,   'f' },
     { "addr",        required_argument,  NULL,   'a' },
     { "port",        required_argument,  NULL,   'p' },
+    { "dst_addr",    required_argument,  NULL,   'A' },
     { "concurrency", required_argument,  NULL,   'c' },
     { NULL,          0,                  NULL,    0  }
 };
 
 
-static char *short_options = "hvtdFrl:L:C:f:a:p:c:";
+static char *short_options = "hvtdFrl:L:C:f:a:p:A:c:";
 
 
 static int
 mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
 {
-    int c;
+    int              c;
+    struct hostent  *he;
 
     opterr = 0;
 
@@ -134,6 +139,19 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
             }
             break;
 
+        case 'A':
+            if (inet_aton(optarg, &ins->dst_addr.sin_addr) == 0) {
+                if ((he = gethostbyname(optarg)) == NULL) {
+                    mpc_log_stderr(0, "option '-A' host \"%s\" not found",
+                                   optarg);
+                    return MPC_ERROR;
+                }
+                mpc_memcpy(&ins->dst_addr.sin_addr, he->h_addr, 
+                           sizeof(struct in_addr));
+            }
+            ins->use_dst_addr = 1;
+            break;
+
         case 'c':
             ins->concurrency = mpc_atoi((uint8_t *)optarg, strlen(optarg));
             if (ins->concurrency == MPC_ERROR) {
@@ -158,6 +176,7 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
                 mpc_log_stderr(0, "option -%c requires a file name", optopt);
                 break;
 
+            case 'A':
             case 'a':
             case 'L':
                 mpc_log_stderr(0, "option -%c requires a string", optopt);
@@ -191,6 +210,7 @@ mpc_show_usage(void)
            "  -v, --version         : show version and exit" CRLF
            "  -t, --test-conf       : test configuration syntax and exit" CRLF
            "  -f, --file            : url files" CRLF
+           "  -A, --dst-addr        : use specified address by this" CRLF
            "  -F, --follow          : follow 302 redirect" CRLF
            "  -r, --replay          : replay a url file" CRLF
            "  -l, --log=S           : log file" CRLF
@@ -272,6 +292,8 @@ main(int argc, char **argv)
         exit(0);
     }
 
+    mpc_rlimit_reset();
+
     if (mpc_core_init(mpc_ins) != MPC_OK) {
         exit(1);
     }
@@ -299,4 +321,21 @@ mpc_stop()
 {
     mpc_ins->stat->stop = time_us();
     mpc_event_stop(mpc_ins->el, 0);
+}
+
+
+static void
+mpc_rlimit_reset()
+{
+    struct rlimit rlim;
+
+    /* Raise open files */
+    rlim.rlim_cur = MPC_MAX_OPENFILES;
+    rlim.rlim_max = MPC_MAX_OPENFILES;
+    setrlimit(RLIMIT_NOFILE, &rlim);
+
+    /* Alow core dump */
+    rlim.rlim_cur = 1 << 29;
+    rlim.rlim_max = 1 << 29;
+    setrlimit(RLIMIT_CORE, &rlim);
 }

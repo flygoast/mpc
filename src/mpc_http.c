@@ -319,6 +319,17 @@ mpc_http_process_request(mpc_http_t *mpc_http)
 
     ASSERT(mpc_url != NULL);
 
+    if (ins->use_dst_addr) {
+        if (mpc_http_create_request((char *)&ins->dst_addr.sin_addr, mpc_http)
+            != MPC_OK)
+        {
+            mpc_log_err(0, "create http request \"http://%V%V\" failed",
+                        &mpc_url->host, &mpc_url->uri);
+        }
+
+        return MPC_OK;
+    }
+
     if (mpc_url->no_resolve) {
         if (mpc_http_create_request((char *)mpc_url->host.data, mpc_http)
             != MPC_OK)
@@ -437,7 +448,7 @@ mpc_http_create_request(char *addr, mpc_http_t *mpc_http)
                      "GET %V HTTP/1.1" CRLF
                      "Host: %V" CRLF
                      "Accept: *.*" CRLF
-                     "UserAgent: %s" CRLF
+                     "User-Agent: %s" CRLF
                      "Connection: close" CRLF
                      CRLF,
                      &mpc_url->uri,
@@ -1381,13 +1392,11 @@ mpc_http_create_missing_requests(mpc_instance_t *ins)
 
     concurrency = mpc_http_get_used();
     
-    printf("concurrency: %d:%d\n", concurrency, ins->concurrency);
-
-    if (concurrency >= (uint32_t)(ins->concurrency * 1.5)) {
+    if (concurrency >= (uint32_t)(ins->concurrency * 1.0)) {
         return;
     }
 
-    n = (uint32_t)(ins->concurrency * 1.5) - concurrency;
+    n = (uint32_t)(ins->concurrency * 1.0) - concurrency;
 
     ASSERT(n > 0);
 

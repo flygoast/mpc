@@ -81,6 +81,7 @@ typedef struct mpc_stat_s mpc_stat_t;
 #define MPC_DEFAULT_PORT        17748
 #define MPC_DEFAULT_CONCURRENCY 50
 #define MPC_MAX_CONCURRENCY     10000
+#define MPC_MAX_OPENFILES       32768
 
 #define MPC_OK                  0
 #define MPC_ERROR               -1
@@ -125,8 +126,10 @@ struct mpc_instance_s {
     mpc_array_t         *urls;
     int                  concurrency;
     mpc_stat_t          *stat;
+    struct sockaddr_in   dst_addr;
     unsigned             follow_location:1;
     unsigned             replay:1;
+    unsigned             use_dst_addr;
 };
 
 void mpc_stop();
