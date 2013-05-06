@@ -294,8 +294,6 @@ mpc_core_process_cron(mpc_event_loop_t *el, int64_t id, void *data)
 {
     mpc_instance_t   *ins = (mpc_instance_t *)data;
 
-    printf("%d\n", ins->http_count);
-
     if (ins->replay) {
         mpc_core_notify(ins);
 

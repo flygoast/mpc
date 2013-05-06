@@ -57,11 +57,12 @@ static struct option long_options[] = {
     { "port",        required_argument,  NULL,   'p' },
     { "dst_addr",    required_argument,  NULL,   'A' },
     { "concurrency", required_argument,  NULL,   'c' },
+    { "method",      required_argument,  NULL,   'm' },
     { NULL,          0,                  NULL,    0  }
 };
 
 
-static char *short_options = "hvtdFrl:L:C:f:a:p:A:c:";
+static char *short_options = "hvtdFrl:L:C:f:a:p:A:c:m:";
 
 
 static int
@@ -168,6 +169,15 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
             }
             break;
 
+        case 'm':
+            ins->http_method = mpc_http_get_method(optarg);
+            if (ins->http_method == MPC_ERROR) {
+                mpc_log_stderr(0, 
+                          "option '-m' requires a valid http method: GET|HEAD");
+                return MPC_ERROR;
+            }
+            break;
+
         case '?':
             switch (optopt) {
             case 'f':
@@ -179,6 +189,7 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
             case 'A':
             case 'a':
             case 'L':
+            case 'm':
                 mpc_log_stderr(0, "option -%c requires a string", optopt);
                 break;
 
@@ -203,7 +214,7 @@ static void
 mpc_show_usage(void)
 {
     printf("Usage: mpc [-?hvtdFr] [-l log file] [-L log level] " CRLF
-           "           [-c concurrency] [-f url file]" CRLF
+           "           [-c concurrency] [-f url file] [-m http method]" CRLF
            CRLF
            "Options:" CRLF
            "  -h, --help            : this help" CRLF
@@ -216,6 +227,7 @@ mpc_show_usage(void)
            "  -l, --log=S           : log file" CRLF
            "  -L, --level=S         : log level" CRLF
            "  -c, --concurrency=N   : concurrency" CRLF
+           "  -m, --method=S        : http method GET, HEAD" CRLF
            CRLF);
 }
 
@@ -242,6 +254,8 @@ mpc_set_default_option(mpc_instance_t *ins)
 
     ins->follow_location = 0;
     ins->replay = 0;
+    ins->use_dst_addr = 0;
+    ins->http_method = MPC_HTTP_METHOD_GET;
     ins->log_level = MPC_LOG_INFO;
     ins->log_file = NULL;
 

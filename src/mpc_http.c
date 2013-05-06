@@ -41,6 +41,13 @@ static uint32_t         mpc_http_max_nfree;
 static uint32_t         mpc_http_used;
 
 
+static mpc_str_t http_methods[] = {
+    mpc_string("GET"),
+    mpc_string("HEAD"),
+    mpc_null_string,
+};
+
+
 #ifdef WITH_MPC_RESOLVER
 static void mpc_http_gethostbyname_cb(mpc_event_loop_t *el, int status,
     struct hostent *host, void *arg);
@@ -445,12 +452,13 @@ mpc_http_create_request(char *addr, mpc_http_t *mpc_http)
 
     last = snd_buf->end;
     p = mpc_slprintf(snd_buf->start, last,
-                     "GET %V HTTP/1.1" CRLF
+                     "%V %V HTTP/1.1" CRLF
                      "Host: %V" CRLF
                      "Accept: *.*" CRLF
                      "User-Agent: %s" CRLF
                      "Connection: close" CRLF
                      CRLF,
+                     &http_methods[mpc_http->ins->http_method],
                      &mpc_url->uri,
                      &mpc_url->host,
                      MPC_VERSION);
@@ -668,6 +676,11 @@ parse_headers:
 #ifdef WITH_DEBUG
     mpc_array_each(http->headers, mpc_http_log_headers, (void *)http);
 #endif
+
+    if (http->ins->http_method == MPC_HTTP_METHOD_HEAD) {
+        goto done;
+    }
+
     http->phase = MPC_HTTP_PARSE_BODY;
 
 parse_body:
@@ -692,6 +705,8 @@ parse_body:
         mpc_conn_buf_rewind(http->conn);
         return;
     }
+
+done:
 
     http->bench.end = time_us();
 
@@ -1433,4 +1448,28 @@ mpc_http_create_missing_requests(mpc_instance_t *ins)
             mpc_http_put(mpc_http);
         }
     }
+}
+
+
+int
+mpc_http_get_method(char *method)
+{
+    mpc_str_t  *str;
+    int         i, len; 
+
+    len = strlen(method);
+
+    for (str = http_methods, i = 0; str->len; str++, i++) {
+        if (str->len != len) {
+            continue;
+        }
+
+        if (mpc_strncasecmp(str->data, (uint8_t *)method, len) != 0) {
+            continue;
+        }
+
+        return i;
+    }
+
+    return MPC_ERROR;
 }

@@ -35,8 +35,8 @@
 #include <limits.h>
 
 
-#define MPC_INT32_LEN   sizeof("-2147483648") - 1
-#define MPC_INT64_LEN   sizeof("-9223372036854775808") - 1
+#define MPC_INT32_LEN           sizeof("-2147483648") - 1
+#define MPC_INT64_LEN           sizeof("-9223372036854775808") - 1
 
 #define MPC_MAX_INT32_VALUE     (uint32_t)0x7fffffff
 #define MPC_MAX_UINT32_VALUE    (uint32_t)0xffffffff

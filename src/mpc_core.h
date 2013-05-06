@@ -125,6 +125,7 @@ struct mpc_instance_s {
     mpc_event_loop_t    *el;
     int                  self_pipe[2];
     mpc_array_t         *urls;
+    int                  http_method;
     int                  concurrency;
     mpc_stat_t          *stat;
     struct sockaddr_in   dst_addr;
@@ -132,7 +133,7 @@ struct mpc_instance_s {
     uint32_t             http_count;
     unsigned             follow_location:1;
     unsigned             replay:1;
-    unsigned             use_dst_addr;
+    unsigned             use_dst_addr:1;
 };
 
 
