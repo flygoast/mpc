@@ -55,14 +55,16 @@ static struct option long_options[] = {
     { "file",        required_argument,  NULL,   'f' },
     { "addr",        required_argument,  NULL,   'a' },
     { "port",        required_argument,  NULL,   'p' },
-    { "dst_addr",    required_argument,  NULL,   'A' },
+    { "dst-addr",    required_argument,  NULL,   'A' },
     { "concurrency", required_argument,  NULL,   'c' },
     { "method",      required_argument,  NULL,   'm' },
+    { "show-result", required_argument,  NULL,   's' },
+    { "mark",        required_argument,  NULL,   'M' },
     { NULL,          0,                  NULL,    0  }
 };
 
 
-static char *short_options = "hvtdFrl:L:C:f:a:p:A:c:m:";
+static char *short_options = "hvtdFrl:L:C:f:a:p:A:c:m:s:M:";
 
 
 static int
@@ -178,6 +180,14 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
             }
             break;
 
+        case 's':
+            ins->result_filename = optarg;
+            break;
+
+        case 'M':
+            ins->result_mark = optarg;
+            break;
+
         case '?':
             switch (optopt) {
             case 'f':
@@ -190,6 +200,8 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
             case 'a':
             case 'L':
             case 'm':
+            case 'M':
+            case 's':
                 mpc_log_stderr(0, "option -%c requires a string", optopt);
                 break;
 
@@ -215,19 +227,23 @@ mpc_show_usage(void)
 {
     printf("Usage: mpc [-?hvtdFr] [-l log file] [-L log level] " CRLF
            "           [-c concurrency] [-f url file] [-m http method]" CRLF
+           "           [-s result file] [-M result mark string] " CRLF
+           "           [-A specified address] " CRLF
            CRLF
            "Options:" CRLF
            "  -h, --help            : this help" CRLF
            "  -v, --version         : show version and exit" CRLF
            "  -t, --test-conf       : test configuration syntax and exit" CRLF
            "  -f, --file            : url files" CRLF
-           "  -A, --dst-addr        : use specified address by this" CRLF
+           "  -A, --dst-addr=S      : use specified address by this" CRLF
            "  -F, --follow          : follow 302 redirect" CRLF
            "  -r, --replay          : replay a url file" CRLF
            "  -l, --log=S           : log file" CRLF
            "  -L, --level=S         : log level" CRLF
            "  -c, --concurrency=N   : concurrency" CRLF
            "  -m, --method=S        : http method GET, HEAD" CRLF
+           "  -s, --show-result=S   : show result in a file" CRLF
+           "  -M, --mark=S          : result file mark string" CRLF
            CRLF);
 }
 
@@ -244,6 +260,8 @@ mpc_set_default_option(mpc_instance_t *ins)
 {
     ins->conf_filename = MPC_DEFAULT_CONF_PATH;
     ins->input_filename = NULL;
+    ins->result_filename = NULL;
+    ins->result_mark = NULL;
     ins->addr = NULL;
     ins->port = MPC_DEFAULT_PORT;
     ins->urls = NULL;
@@ -268,7 +286,8 @@ mpc_set_default_option(mpc_instance_t *ins)
 int 
 main(int argc, char **argv)
 {
-    int              rc;
+    int    fd;
+    int    rc;
 
     mpc_ins = (mpc_instance_t *)mpc_calloc(sizeof(mpc_instance_t), 1);
     if (mpc_ins == NULL) {
@@ -324,6 +343,14 @@ main(int argc, char **argv)
     }
 
     mpc_stat_print(mpc_ins->stat);
+
+    if (mpc_ins->result_filename) {
+        fd = mpc_stat_result_create(mpc_ins->result_filename);
+        if (fd != MPC_ERROR) {
+            mpc_stat_result_record(fd, mpc_ins->stat, mpc_ins->result_mark);
+            mpc_stat_result_close(fd);
+        }
+    }
 
     mpc_stat_destroy(mpc_ins->stat);
 

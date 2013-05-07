@@ -51,6 +51,7 @@
 #include <sched.h>
 #include <pthread.h>
 #include <execinfo.h>
+#include <locale.h>
 
 
 typedef struct mpc_instance_s mpc_instance_t;
@@ -118,6 +119,8 @@ typedef struct mpc_stat_s mpc_stat_t;
 struct mpc_instance_s {
     char                *conf_filename;
     char                *input_filename;
+    char                *result_filename;
+    char                *result_mark;
     char                *addr;
     int                  port;
     int                  log_level;
