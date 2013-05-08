@@ -165,7 +165,7 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
             if (ins->concurrency < 1 
                 || ins->concurrency > MPC_MAX_CONCURRENCY)
             {
-                mpc_log_stderr(0, "option '-c' value must be between 1 and %u",
+                mpc_log_stderr(0, "option '-c' value must be between 1 and %ud",
                                MPC_MAX_CONCURRENCY); 
                 return MPC_ERROR;
             }
