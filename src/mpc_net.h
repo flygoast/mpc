@@ -32,6 +32,7 @@
 #define __MPC_NET_H_INCLUDED__
 
 
+#include <netdb.h>
 #include <sys/un.h>
 #include <sys/types.h>
 #include <sys/socket.h>

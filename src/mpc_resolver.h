@@ -31,7 +31,6 @@
 #ifndef __MPC_RESOLVER_H_INCLUDED__
 #define __MPC_RESOLVER_H_INCLUDED__
 
-#include <netdb.h>
 #include <ares.h>
 
 

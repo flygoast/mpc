@@ -50,7 +50,14 @@
 #include <sys/resource.h>
 #include <sched.h>
 #include <pthread.h>
+#ifdef __linux__
+#define HAVE_BACKTRACE
+#endif /* __linux__ */
+
+#ifdef HAVE_BACKTRACE
 #include <execinfo.h>
+#endif /* HAVE_BACKTRACE */
+
 #include <locale.h>
 
 
