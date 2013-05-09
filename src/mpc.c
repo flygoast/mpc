@@ -45,7 +45,7 @@ static void mpc_rlimit_reset();
 static struct option long_options[] = {
     { "help",        no_argument,        NULL,   'h' },
     { "version",     no_argument,        NULL,   'v' },
-    { "test",        no_argument,        NULL,   't' },
+    { "test",        no_argument,        NULL,   'T' },
     { "daemon",      no_argument,        NULL,   'd' },
     { "follow",      no_argument,        NULL,   'F' },
     { "replay",      no_argument,        NULL,   'r' },
@@ -60,11 +60,12 @@ static struct option long_options[] = {
     { "method",      required_argument,  NULL,   'm' },
     { "show-result", required_argument,  NULL,   's' },
     { "mark",        required_argument,  NULL,   'M' },
+    { "time",        required_argument,  NULL,   't' },
     { NULL,          0,                  NULL,    0  }
 };
 
 
-static char *short_options = "hvtdFrl:L:C:f:a:p:A:c:m:s:M:";
+static char *short_options = "hvTdFrl:L:C:f:a:p:A:c:m:s:M:t:";
 
 
 static int
@@ -88,7 +89,7 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
             show_version = 1;
             break;
 
-        case 't':
+        case 'T':
             test_conf = 1;
             break;
 
@@ -188,6 +189,16 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
             ins->result_mark = optarg;
             break;
 
+        case 't':
+            ins->run_time = mpc_parse_time(optarg, strlen(optarg));
+            if (ins->run_time == MPC_ERROR) {
+                mpc_log_stderr(0, 
+                          "option '-t' requires a valid time expression" CRLF
+                          "such as: 2d2h2m2s");
+                return MPC_ERROR;
+            }
+            break;
+
         case '?':
             switch (optopt) {
             case 'f':
@@ -225,15 +236,15 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
 static void
 mpc_show_usage(void)
 {
-    printf("Usage: mpc [-?hvtdFr] [-l log file] [-L log level] " CRLF
+    printf("Usage: mpc [-?hvTdFr] [-l log file] [-L log level] " CRLF
            "           [-c concurrency] [-f url file] [-m http method]" CRLF
            "           [-s result file] [-M result mark string] " CRLF
-           "           [-A specified address] " CRLF
+           "           [-A specified address] [-t run time]" CRLF
            CRLF
            "Options:" CRLF
            "  -h, --help            : this help" CRLF
            "  -v, --version         : show version and exit" CRLF
-           "  -t, --test-conf       : test configuration syntax and exit" CRLF
+           "  -T, --test-conf       : test configuration syntax and exit" CRLF
            "  -f, --file            : url files" CRLF
            "  -A, --dst-addr=S      : use specified address by this" CRLF
            "  -F, --follow          : follow 302 redirect" CRLF
@@ -244,6 +255,9 @@ mpc_show_usage(void)
            "  -m, --method=S        : http method GET, HEAD" CRLF
            "  -s, --show-result=S   : show result in a file" CRLF
            "  -M, --mark=S          : result file mark string" CRLF
+           "  -t, --time=Nm         : timed testing where \"m\" is modifer" CRLF
+           "                          S(second), M(minute), H(hour), D(day)"
+           CRLF
            CRLF);
 }
 
@@ -266,6 +280,7 @@ mpc_set_default_option(mpc_instance_t *ins)
     ins->port = MPC_DEFAULT_PORT;
     ins->urls = NULL;
     ins->concurrency = MPC_DEFAULT_CONCURRENCY;
+    ins->run_time = 0;
 
     ins->http_count = 0;
     TAILQ_INIT(&ins->http_hdr);
@@ -363,7 +378,7 @@ main(int argc, char **argv)
 void
 mpc_stop()
 {
-    mpc_ins->stat->stop = time_us();
+    mpc_ins->stat->stop = mpc_time_us();
     mpc_event_stop(mpc_ins->el, 0);
 }
 

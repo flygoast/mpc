@@ -71,9 +71,9 @@ void mpc_get_time(int64_t *seconds, int64_t *milliseconds);
 int mpc_atoi(uint8_t *line, size_t n);
 int mpc_hextoi(uint8_t *line, size_t n);
 uint8_t *mpc_hex_dump(uint8_t *dst, uint8_t *src, size_t len);
-uint64_t time_ms(void);
-uint64_t time_us(void);
-
+uint64_t mpc_time_ms(void);
+uint64_t mpc_time_us(void);
+int64_t mpc_parse_time(char *str, int len);
 
 
 #endif /* __MPC_UTIL_H_INCLUDED__ */

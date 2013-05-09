@@ -195,7 +195,7 @@ mpc_hex_dump(uint8_t *dst, uint8_t *src, size_t len)
 
 
 uint64_t
-time_ms(void)
+mpc_time_ms(void)
 {
     struct timeval   tv;
     uint64_t         mst;
@@ -208,7 +208,7 @@ time_ms(void)
 
 
 uint64_t
-time_us(void)
+mpc_time_us(void)
 {
     struct timeval  tv;
     uint64_t        ust;
@@ -217,4 +217,103 @@ time_us(void)
     ust = ((uint64_t)tv.tv_sec) * 1000000;
     ust += tv.tv_usec;
     return ust;
+}
+
+
+int64_t
+mpc_parse_time(char *str, int len)
+{
+    char       *p, *last;
+    int64_t     value, total, scale, max;
+    int         valid;
+    enum {
+        st_start = 0,
+        st_day,
+        st_hour,
+        st_min,
+        st_sec,
+        st_last
+    } step;
+
+    step = st_start;
+    valid = 0;
+    value = 0;
+    p = str;
+    last = p + len;
+
+    while (p < last) {
+        if (*p >= '0' && *p <= '9') {
+            value = value * 10 + (*p++ - '0');
+            valid = 1;
+            continue;
+        }
+
+        switch (*p++) {
+        case 'D':
+        case 'd':
+            if (step >= st_day) {
+                return MPC_ERROR;
+            }
+            step = st_day;
+            max = MPC_MAX_INT64_VALUE / (60 * 60 * 24);
+            scale = 60 * 60 * 24;
+            break;
+
+        case 'H':
+        case 'h':
+            if (step >= st_hour) {
+                return MPC_ERROR;
+            }
+            step = st_hour;
+            max = MPC_MAX_INT64_VALUE / (60 * 60);
+            scale = 60 * 60;
+            break;
+
+        case 'M':
+        case 'm':
+            if (step >= st_min) {
+                return MPC_ERROR;
+            }
+            step = st_min;
+            max = MPC_MAX_INT64_VALUE / 60;
+            scale = 60;
+            break;
+
+        case 'S':
+        case 's':
+            if (step >= st_sec) {
+                return MPC_ERROR;
+            }
+            step = st_sec;
+            max = MPC_MAX_INT64_VALUE;
+            scale = 1;
+            break;
+
+        default:
+            return MPC_ERROR;
+        }
+            
+        if (value > max) {
+            return MPC_ERROR;
+        }
+
+        total += value * scale;
+
+        if (total > MPC_MAX_INT64_VALUE) {
+            return MPC_ERROR;
+        }
+
+        value = 0;
+        scale = 1;
+
+        while (p < last && *p == ' ') {
+            p++;
+        }
+    }
+
+    if (valid) {
+        return total + value * scale;
+    }
+
+    return MPC_ERROR;
 }

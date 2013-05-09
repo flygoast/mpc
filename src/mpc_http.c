@@ -472,7 +472,7 @@ mpc_http_create_request(char *addr, mpc_http_t *mpc_http)
         flags |= MPC_NET_NEEDATON;
     }
 
-    mpc_http->bench.start = time_us();
+    mpc_http->bench.start = mpc_time_us();
     
     sockfd = mpc_net_tcp_connect(addr, mpc_url->port, MPC_NET_NONBLOCK);
     if (sockfd == MPC_ERROR) {
@@ -545,7 +545,7 @@ mpc_http_process_connect(mpc_event_loop_t *el, int fd, void *data, int mask)
     mpc_url_t   *mpc_url = http->url;
     int          n;
 
-    http->bench.connected = time_us();
+    http->bench.connected = mpc_time_us();
 
     mpc_log_debug(0, "connecting time: %uLms, host: \"%V\" uri: \"%V\"",
                   (http->bench.connected - http->bench.start) / 1000,
@@ -596,7 +596,7 @@ mpc_http_process_response(mpc_event_loop_t *el, int fd, void *data, int mask)
     int           rc;
     uint64_t      elapsed;
 
-    http->bench.first_packet_reach = time_us();
+    http->bench.first_packet_reach = mpc_time_us();
 
     mpc_log_debug(0, "first packet: %uLms, host: \"%V\" uri: \"%V\"",
                 (http->bench.first_packet_reach - http->bench.connected) / 1000,
@@ -708,7 +708,7 @@ parse_body:
 
 done:
 
-    http->bench.end = time_us();
+    http->bench.end = mpc_time_us();
 
     if (conn->eof) {
         mpc_log_debug(0, "request over server close connection,"

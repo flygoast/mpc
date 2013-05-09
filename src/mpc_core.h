@@ -141,6 +141,7 @@ struct mpc_instance_s {
     struct sockaddr_in   dst_addr;
     mpc_http_hdr_t       http_hdr;
     uint32_t             http_count;
+    uint64_t             run_time;
     unsigned             follow_location:1;
     unsigned             replay:1;
     unsigned             use_dst_addr:1;
