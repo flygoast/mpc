@@ -37,10 +37,12 @@ mpc_net_socket(int domain, int type)
     int s, on = 1;
 
     if ((s = socket(domain, type, 0)) == -1) {
+        mpc_log_err(errno, "socket() failed");
         return MPC_ERROR;
     }
 
     if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == -1) {
+        mpc_log_err(errno, "setsockopt() reuseaddr failed");
         return MPC_ERROR;
     }
 
@@ -52,11 +54,13 @@ static int
 mpc_net_listen(int sockfd, struct sockaddr *sa, socklen_t len)
 {
     if (bind(sockfd, sa, len) == -1) {
+        mpc_log_err(errno, "bind() failed");
         close(sockfd);
         return MPC_ERROR;
     }
 
     if (listen(sockfd, 511) == -1) {
+        mpc_log_err(errno, "listen() failed");
         close(sockfd);
         return MPC_ERROR;
     }

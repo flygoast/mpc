@@ -83,7 +83,7 @@ typedef struct mpc_stat_s mpc_stat_t;
 
 
 #define MPC_VERSION_NUM         1           /* aabbbccc */
-#define MPC_VERSION_STR         "0.0.1"
+#define MPC_VERSION_STR         "0.0.2"
 #define MPC_VERSION             "mpc/" MPC_VERSION_STR
 
 #define MPC_DEFAULT_CONF_PATH   "conf/mpc.conf"
