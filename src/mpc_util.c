@@ -238,6 +238,7 @@ mpc_parse_time(char *str, int len)
     step = st_start;
     valid = 0;
     value = 0;
+    total = 0;
     p = str;
     last = p + len;
 

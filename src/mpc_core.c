@@ -309,7 +309,6 @@ mpc_core_process_cron(mpc_event_loop_t *el, int64_t id, void *data)
     if (ins->run_time != 0) {
         if (++cron_count >= (1000 / MPC_CRON_INTERVAL) - 1) {
             cron_count = 0;
-
             if (ins->stat->start != 0) {
                 if (((mpc_time_us() - ins->stat->start) / 1000 / 1000)
                     >= ins->run_time)

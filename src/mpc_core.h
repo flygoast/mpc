@@ -83,7 +83,7 @@ typedef struct mpc_stat_s mpc_stat_t;
 
 
 #define MPC_VERSION_NUM         1           /* aabbbccc */
-#define MPC_VERSION_STR         "0.0.2"
+#define MPC_VERSION_STR         "0.0.3"
 #define MPC_VERSION             "mpc/" MPC_VERSION_STR
 
 #define MPC_DEFAULT_CONF_PATH   "conf/mpc.conf"
@@ -141,7 +141,7 @@ struct mpc_instance_s {
     struct sockaddr_in   dst_addr;
     mpc_http_hdr_t       http_hdr;
     uint32_t             http_count;
-    uint64_t             run_time;
+    int64_t              run_time;
     unsigned             follow_location:1;
     unsigned             replay:1;
     unsigned             use_dst_addr:1;
