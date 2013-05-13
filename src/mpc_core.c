@@ -127,7 +127,7 @@ mpc_core_run(mpc_instance_t *ins)
     listen_fd = mpc_net_tcp_server(ins->addr, ins->port);
     if (listen_fd == MPC_ERROR) {
         mpc_log_stderr(0, "create tcp server on %s:%d failed",
-                       ins->addr, ins->port);
+                       ins->addr ? ins->addr : "0.0.0.0", ins->port);
         return MPC_ERROR;
     }
 
