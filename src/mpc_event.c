@@ -138,7 +138,7 @@ mpc_create_file_event(mpc_event_loop_t *el, int fd, int mask,
     mpc_file_event_t  *fe;
 
     if (fd >= el->setsize) {
-        errno = ERANGE;
+        mpc_log_err(0, "too big fd (%d) beyond limit (%d)", fd, el->setsize);
         return MPC_ERROR;
     } 
 
@@ -155,7 +155,7 @@ mpc_create_file_event(mpc_event_loop_t *el, int fd, int mask,
 
     if (mask & MPC_WRITABLE) {
         fe->w_file_ptr = file_ptr;
-    } 
+    }
     fe->data = data;
 
     /* Once one file event has been registered, the el->maxfd
@@ -175,12 +175,19 @@ mpc_delete_file_event(mpc_event_loop_t *el, int fd, int mask)
     mpc_file_event_t *fe;
 
     if (fd >= el->setsize) {
+        mpc_log_warn(0, "too big fd (%d) beyond limit (%d)", fd, el->setsize);
         return;
     }
 
     fe = &el->events[fd];
     if (fe->mask == MPC_NONE) {
         return;
+    };
+
+    if (mask == MPC_READABLE) {
+        fe->r_file_ptr = NULL;
+    } else if (mask == MPC_WRITABLE) {
+        fe->w_file_ptr = NULL;
     }
 
     fe->mask = fe->mask & (~mask);
