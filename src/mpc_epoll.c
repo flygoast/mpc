@@ -127,7 +127,6 @@ mpc_event_api_del_event(mpc_event_loop_t *el, int fd, int delmask)
         ee.events |= EPOLLOUT;
     }
 
-    ee.events |= EPOLLET;
     ee.data.u64 = 0;
     ee.data.fd = fd;
     if (mask != MPC_NONE) {

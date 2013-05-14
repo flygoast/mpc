@@ -423,9 +423,9 @@ mpc_process_events(mpc_event_loop_t *el, int flags)
     if (el->maxfd != -1
         || ((flags & MPC_TIME_EVENTS) && !(flags & MPC_DONT_WAIT)))
     {
-        int             j;
-        mpc_time_event_t *shortest = NULL;
-        struct timeval    tv, *tvp;
+        int                j;
+        mpc_time_event_t  *shortest = NULL;
+        struct timeval     tv, *tvp;
         
         if (flags & MPC_TIME_EVENTS && !(flags & MPC_DONT_WAIT)) {
             shortest = mpc_search_nearest_timer(el);
