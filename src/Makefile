@@ -2,7 +2,7 @@ DEBUG = -g 						\
 		-DWITH_DEBUG			\
 		-DWITH_MPC_RESOLVER
 CC = gcc
-CFLAGS = $(DEBUG)  -Wall -Werror
+CFLAGS = $(DEBUG)  -Wall -Werror -rdynamic
 INC = -I .
 LIB = -L /home/fenggu/slib -lpthread -lcares -lrt
 OO = mpc.o 				\
