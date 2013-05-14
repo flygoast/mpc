@@ -77,7 +77,6 @@ struct mpc_http_s {
     uint32_t                 magic;
 #endif
     TAILQ_ENTRY(mpc_http_s)  next;
-    uint64_t                 last_action;
     mpc_instance_t          *ins;
     mpc_conn_t              *conn;
     mpc_url_t               *url;
