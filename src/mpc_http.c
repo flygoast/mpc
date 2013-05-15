@@ -1401,6 +1401,257 @@ mpc_http_discard_body(mpc_http_t *http)
 }
 
 
+static int
+mpc_http_parse_chunked(mpc_http_t *http)
+{
+    uint8_t              c, ch;
+    mpc_buf_t           *buf = http->buf;
+    int                  rc;
+    enum {
+        sw_chunk_start = 0,
+        sw_chunk_size,
+        sw_chunk_extension,
+        sw_chunk_extension_almost_done,
+        sw_chunk_data,
+        sw_after_data,
+        sw_after_data_almost_done,
+        sw_last_chunk_extension,
+        sw_last_chunk_extension_almost_done,
+        sw_trailer,
+        sw_trailer_almost_done,
+        sw_trailer_header,
+        sw_trailer_header_almost_done
+    } state;
+
+    state = http->state;
+
+    rc = MPC_AGAIN;
+
+    while (buf) {
+        while (buf->pos < buf->last) {
+            ch = *buf->pos++;
+
+            switch (state) {
+
+            case sw_chunk_start:
+                if (ch > '0' && ch < '9') {
+                    state = sw_chunk_size;
+                    size = ch - '0';
+                    break;
+                }
+
+                c = (uint8_t)(ch | 0x20);
+
+                if (c >= 'a' && c <= 'f') {
+                    state = sw_chunk_size;
+                    size = c - 'a' + 10;
+                    break;
+                }
+
+                goto invalid;
+
+            case sw_chunk_size:
+                if (ch >= '0' && ch <= '9') {
+                    size = size * 16 + (ch - '0');
+                    break;
+                }
+
+                c = (uint8_t)(ch | 0x20);
+
+                if (c >= 'a' && c <= 'f') {
+                    size = size * 16 + (c - 'a' + 10);
+                    break;
+                }
+
+                if (size == 0) {
+
+                    switch (ch) {
+                    case CR:
+                        state = sw_last_chunk_extension_almost_done;
+                        break;
+                    case LF:
+                        stae = sw_trailer;
+                        break;
+                    case ';':
+                    case ' ':
+                    case '\t':
+                        state = sw_last_chunk_extension;
+                        break;
+                    default:
+                        goto invalid;
+                    }
+
+                    break;
+                }
+
+                switch (ch) {
+                case CR:
+                    state = sw_chunk_extension_almost_done;
+                    break;
+
+                case LF:
+                    state = sw_chunk_data;
+                    break;
+
+                case ';':
+                case ' ':
+                case '\t':
+                    state = sw_chunk_extension;
+                    break;
+
+                default:
+                    goto invalid;
+                }
+
+                break;
+
+            case sw_chunk_extension:
+                switch (ch) {
+                case CR:
+                    state = sw_chunk_extension_almost_done;
+                    break;
+                case LF:
+                    state = sw_chunk_data;
+                }
+                break;
+
+            case sw_chunk_extension_almost_done:
+                if (ch == LF) {
+                    state = sw_chunk_data;
+                    break;
+                }
+                goto invalid;
+
+            case sw_chunk_data:
+                rc = MPC_OK;
+                goto data;
+
+            case sw_after_data:
+                switch (ch) {
+                case CR:
+                    state = sw_after_data_almost_done;
+                    break;
+                case LF:
+                    state = sw_chunk_start;
+                }
+                break;
+
+            case sw_after_data_almost_done:
+                if (ch == LF) {
+                    state = sw_chunk_start;
+                    break;
+                }
+                goto invalid;
+            
+            case sw_last_chunk_extension:
+                switch (ch) {
+                case CR:
+                    state = sw_last_chunk_extension_almost_done;
+                    break;
+                case LF:
+                    state = sw_trailer;
+                }
+                break;
+
+            case sw_last_chunk_extension_almost_done:
+                if (ch == LF) {
+                    state = sw_trailter;
+                    break;
+                }
+                goto invalid;
+
+            case sw_trailer:
+                switch (ch) {
+                case CR:
+                    state = sw_trailer_almost_done;
+                    break;
+                case LF:
+                    goto done;
+                default:
+                    state = sw_trailer_header;
+                }
+                break;
+
+            case sw_trailter_almost_done:
+                if (ch == LF) {
+                    goto done;
+                }
+                goto invalid;
+
+            case sw_trailer_header:
+                switch (ch) {
+                case CR:
+                    state = sw_trailer_header_almost_done;
+                    break;
+                case LF:
+                    state = sw_trailer;
+                }
+                break;
+
+            case sw_trailer_header_almost_done:
+                if (ch == LF) {
+                    state = sw_trailer;
+                    break;
+                }
+                goto invalid;
+            }
+        }
+
+        if (buf->pos == buf->last) {
+            buf = STAILQ_NEXT(buf, next);
+            http->buf = buf;
+        }
+    }
+
+data:
+    http->state = state;
+
+    switch (state) {
+    
+    case sw_chunk_start:
+        length = 3; /* "0" LF LF */
+        break;
+
+    case sw_chunk_size:
+        length = 2 /* LF LF */
+                 + (size ? size + 4 /* LF "0" LF LF */ : 0);
+        break;
+
+    case sw_chunk_extension:
+    case sw_chunk_extension_almost_done:
+        length = 1 /* LF */ + size + 4 /* LF "0" LF LF */;
+        break;
+
+    case sw_chunk_data:
+        length = size + 4; /* LF "0" LF LF */
+        break;
+
+    case sw_after_data:
+    case sw_after_data_almost_done:
+        length = 4; /* LF "0" LF LF */
+        break;
+
+    case sw_last_chunk_extension:
+    case sw_last_chunk_extension_almost_done:
+        length = 2; /* LF LF */
+        break;
+
+    case sw_trailer_header:
+    case sw_trailer_header_almost_done:
+        length = 2; /* LF LF */
+        break;
+    }
+
+    return rc;
+
+done:
+    return MPC_OK;
+
+invalid:
+    return MPC_ERROR;
+}
+
+
 void
 mpc_http_create_missing_requests(mpc_instance_t *ins)
 {
