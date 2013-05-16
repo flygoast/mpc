@@ -41,11 +41,129 @@ static uint32_t         mpc_http_max_nfree;
 static uint32_t         mpc_http_used;
 
 
+static int mpc_http_header_content_length(mpc_http_header_t *header, 
+    mpc_http_t *http, void *data);
+static int mpc_http_header_transfer_encoding(mpc_http_header_t *header, 
+    mpc_http_t *http, void *data);
+static int mpc_http_header_location(mpc_http_header_t *header, 
+    mpc_http_t *http, void *data);
+
+
 static mpc_str_t http_methods[] = {
     mpc_string("GET"),
     mpc_string("HEAD"),
     mpc_null_string,
 };
+
+
+static mpc_http_header_handler_t header_handlers[] = {
+    { mpc_string("Content-Length"), mpc_http_header_content_length, NULL }, 
+    { mpc_string("Transfer-Encoding"), mpc_http_header_transfer_encoding,
+        NULL },
+    { mpc_string("Location"), mpc_http_header_location, NULL },
+    { mpc_null_string, NULL, NULL }
+};
+
+
+static
+int mpc_http_header_content_length(mpc_http_header_t *header, 
+    mpc_http_t *http, void *data)
+{
+    MPC_NOTUSED(data);
+
+    if (http->chunked == 1) {
+        mpc_log_warn(0, "header \"Content-Length=%V\" ignored, chunked has set",
+                     &header->value);
+        return MPC_OK;
+    }
+
+    http->content_length_n = mpc_atoi(header->value.data,
+                                      header->value.len);
+    if (http->content_length_n == MPC_ERROR) {
+        mpc_log_err(0, "invalid content-length, header \"%V=%V\"", 
+                    &header->name, &header->value);
+        return MPC_ERROR;
+    }
+
+    return MPC_OK;
+}
+
+
+static
+int mpc_http_header_transfer_encoding(mpc_http_header_t *header, 
+    mpc_http_t *http, void *data)
+{
+    MPC_NOTUSED(data);
+
+    if (header->value.len == sizeof("chunked") - 1
+        && mpc_strncasecmp(header->value.data, (uint8_t *)"chunked", 
+                           sizeof("chunked") - 1) == 0)
+    {
+        http->chunked = 1;
+        return MPC_OK;
+    }
+
+    mpc_log_err(0, "invalid transfer-encoding, header \"%V=%V\"", 
+                &header->name, &header->value);
+    return MPC_ERROR;
+}
+
+
+static
+int mpc_http_header_location(mpc_http_header_t *header, 
+    mpc_http_t *http, void *data)
+{
+    uint8_t          *p, *last;
+    mpc_url_t       **url;
+
+    MPC_NOTUSED(data);
+
+    if (http->locations == NULL) {
+        http->locations = mpc_array_create(4, sizeof(mpc_url_t *));
+        if (http->locations == NULL) {
+            mpc_log_emerg(0, "oom when processing header location");
+            return MPC_ERROR;
+        }
+    }
+
+    if (http->locations->nelem > MPC_HTTP_MAX_REDIRECT) {
+        mpc_log_err(0, "http beyond max redirect(%d),"
+                       " main url(%ud)",
+                       MPC_HTTP_MAX_REDIRECT, http->url->url_id);
+        return MPC_ERROR;
+    }
+
+    url = mpc_array_push(http->locations);
+    if (url == NULL) {
+        return MPC_ERROR;
+    }
+
+    *url = mpc_url_get();
+    if (*url == NULL) {
+        return MPC_ERROR;
+    }
+
+    last = (*url)->buf + (*url)->buf_size;
+
+    p = mpc_slprintf((*url)->buf, last, "%V", &header->value);
+
+    if (p == last) {
+        mpc_log_err(0, "url buf size (%d) too small for \"%V\"",
+        (*url)->buf_size, &header->value);
+        return MPC_ERROR;
+    }
+
+    if (mpc_http_parse_url((*url)->buf, header->value.len, *url)
+        != MPC_OK)
+    {
+        mpc_log_err(0, "parse http url \"%V\" failed", 
+                    &header->value);
+        return MPC_ERROR;
+    }
+
+    http->need_redirect = 1;
+    return MPC_OK;
+}
 
 
 #ifdef WITH_MPC_RESOLVER
@@ -93,6 +211,7 @@ mpc_http_reset_bulk(mpc_http_t *http)
     http->content_length_n = 0;
     http->content_length_received = 0;
     http->need_redirect = 0;
+    http->chunked = 0;
 }
 
 
@@ -123,6 +242,7 @@ mpc_http_reset(mpc_http_t *http)
     http->content_length_n = 0;
     http->content_length_received = 0;
     http->need_redirect = 0;
+    http->chunked = 0;
 }
 
 
@@ -720,9 +840,9 @@ done:
                          &mpc_url->host, &mpc_url->uri);
     }
 
+    mpc_delete_file_event(el, fd, MPC_READABLE);
     close(http->conn->fd);
     http->conn->fd = -1;
-    mpc_delete_file_event(el, fd, MPC_READABLE);
 
     /* record statistics */
     elapsed = http->bench.end - http->bench.start;
@@ -1254,10 +1374,9 @@ header_done:
 static int
 mpc_http_parse_headers(mpc_http_t *http)
 {
-    int                  rc;
-    uint8_t             *p, *last;
-    mpc_http_header_t   *header;
-    mpc_url_t          **url;
+    int                          rc;
+    mpc_http_header_t           *header;
+    mpc_http_header_handler_t   *h;
 
     for (;;) {
 
@@ -1282,65 +1401,19 @@ mpc_http_parse_headers(mpc_http_t *http)
             header->value.data = http->header_start;
             header->value.len = http->header_end - http->header_start;
 
-            if (header->name.len == sizeof("Content-Length") - 1
-                && mpc_strncasecmp(header->name.data, 
-                                   (uint8_t *)"Content-Length",
-                                   sizeof("Content-Length") - 1) == 0)
-            {
-                http->content_length_n = mpc_atoi(header->value.data,
-                                                  header->value.len);
-                if (http->content_length_n == MPC_ERROR) {
-                    return MPC_ERROR;
-                }
-            }
+            for (h = header_handlers; h->handler != NULL; h++) {
 
-            if (header->name.len == sizeof("Location") - 1
-                && mpc_strncasecmp(header->name.data, (uint8_t *)"Location",
-                                   sizeof("Location") - 1) == 0)
-            {
-                if (http->locations == NULL) {
-                    http->locations = mpc_array_create(4, sizeof(mpc_url_t *));
-                    if (http->locations == NULL) {
+                if (header->name.len == h->header.len
+                    && mpc_strncasecmp(header->name.data, h->header.data,
+                                       header->name.len) == 0)
+                {
+                    if (h->handler(header, http, h->data) != MPC_OK) {
+                        mpc_log_err(0, "header \"%V=%V\" process failed",
+                                    &header->name, &header->value);
                         return MPC_ERROR;
                     }
+                    break;
                 }
-
-                if (http->locations->nelem > MPC_HTTP_MAX_REDIRECT) {
-                    mpc_log_err(0, "http beyond max redirect(%d),"
-                                   " main url(%ud)",
-                                   MPC_HTTP_MAX_REDIRECT, http->url->url_id);
-                    return MPC_ERROR;
-                }
-
-                url = mpc_array_push(http->locations);
-                if (url == NULL) {
-                    return MPC_ERROR;
-                }
-
-                *url = mpc_url_get();
-                if (*url == NULL) {
-                    return MPC_ERROR;
-                }
-
-                last = (*url)->buf + (*url)->buf_size;
-
-                p = mpc_slprintf((*url)->buf, last, "%V", &header->value);
-
-                if (p == last) {
-                    mpc_log_err(0, "url buf size (%d) too small for \"%V\"",
-                                (*url)->buf_size, &header->value);
-                    return MPC_ERROR;
-                }
-
-                if (mpc_http_parse_url((*url)->buf, header->value.len, *url)
-                    != MPC_OK)
-                {
-                    mpc_log_err(0, "parse http url \"%V\" failed", 
-                                &header->value);
-                    return MPC_ERROR;
-                }
-
-                http->need_redirect = 1;
             }
 
             continue; 
@@ -1401,6 +1474,7 @@ mpc_http_discard_body(mpc_http_t *http)
 }
 
 
+#if 0
 static int
 mpc_http_parse_chunked(mpc_http_t *http)
 {
@@ -1650,6 +1724,8 @@ done:
 invalid:
     return MPC_ERROR;
 }
+
+#endif
 
 
 void

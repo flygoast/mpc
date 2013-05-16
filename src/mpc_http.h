@@ -64,6 +64,17 @@ typedef struct {
 } mpc_http_header_t;
 
 
+typedef int (*mpc_http_header_handler_pt)(mpc_http_header_t *header, 
+    mpc_http_t *http, void *data);
+
+
+typedef struct {
+    mpc_str_t                     header;
+    mpc_http_header_handler_pt    handler;
+    mpc_http_t                   *data;
+} mpc_http_header_handler_t;
+
+
 typedef struct {
     uint64_t    start;
     uint64_t    connected;
@@ -97,6 +108,7 @@ struct mpc_http_s {
     int                      content_length_received;
     mpc_http_bench_t         bench;
     unsigned                 need_redirect:1;
+    unsigned                 chunked:1;
 };
 
 
