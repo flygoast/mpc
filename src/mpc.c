@@ -326,8 +326,10 @@ main(int argc, char **argv)
 
     if (show_version) {
         printf("mpc: Multiple Protocol Client" CRLF
-               "Version: %s" CRLF,
-               MPC_VERSION_STR);
+               "Version: %s-%s" CRLF
+               "Compiled at %s %s" CRLF
+               CRLF,
+               MPC_VERSION_STR, MPC_VERSION_STATUS, __DATE__, __TIME__);
 
         if (show_help) {
             mpc_show_usage();

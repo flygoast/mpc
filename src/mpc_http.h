@@ -88,6 +88,7 @@ struct mpc_http_s {
     uint32_t                 magic;
 #endif
     TAILQ_ENTRY(mpc_http_s)  next;
+    uint32_t                 id;
     mpc_instance_t          *ins;
     mpc_conn_t              *conn;
     mpc_url_t               *url;
@@ -108,6 +109,7 @@ struct mpc_http_s {
     int                      content_length_received;
     mpc_http_bench_t         bench;
     unsigned                 need_redirect:1;
+    unsigned                 used:1;
     unsigned                 chunked:1;
 };
 

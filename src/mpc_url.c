@@ -81,9 +81,12 @@ mpc_url_task_get(void)
         STAILQ_REMOVE_HEAD(&mpc_url_task_queue, next);
         ASSERT(mpc_url->magic == MPC_URL_MAGIC);
         STAILQ_NEXT(mpc_url, next) = NULL;
+
+        /*
         mpc_log_debug(0, "get task url(%d), total %d, host: \"%V\" uri: \"%V\"",
                       mpc_url->url_id, mpc_url_ntask,
                       &mpc_url->host, &mpc_url->uri);
+                      */
         pthread_mutex_unlock(&mutex_task);
 
         return mpc_url;
@@ -102,9 +105,11 @@ mpc_url_task_insert(mpc_url_t *mpc_url)
 
     STAILQ_INSERT_TAIL(&mpc_url_task_queue, mpc_url, next);
     mpc_url_ntask++;
+    /*
     mpc_log_debug(0, "insert task url(%d), total %d, host: \"%V\" uri: \"%V\"",
                   mpc_url->url_id, mpc_url_ntask, 
                   &mpc_url->host, &mpc_url->uri);
+                  */
 
     pthread_mutex_unlock(&mutex_task);
 }
@@ -219,5 +224,5 @@ mpc_url_deinit(void)
     }
 
     ASSERT(mpc_url_nfree == 0);
-    ASSERT(mpc_url_ntask == 0);
+//    ASSERT(mpc_url_ntask == 0);
 }

@@ -33,10 +33,13 @@
 
 static void mpc_signal_handler(int signo);
 
+#if 0
+
 #ifdef HAVE_BACKTRACE
 static void mpc_backtrace(int skip_count);
 #endif
 
+#endif
 
 static mpc_signal_t signals[] = {
     { SIGUSR1, "SIGUSR1", 0,                 mpc_signal_handler },
@@ -128,6 +131,7 @@ mpc_signal_handler(int signo)
         done = 1;
         break;
 
+/*
     case SIGSEGV:
 #ifdef HAVE_BACKTRACE
         mpc_backtrace(1);
@@ -135,6 +139,7 @@ mpc_signal_handler(int signo)
         action_str = ", core dumping";
         raise(SIGSEGV);
         break;
+*/
 
     default:
         break;
@@ -150,6 +155,7 @@ mpc_signal_handler(int signo)
 }
 
 
+#if 0
 #ifdef HAVE_BACKTRACE
 
 static void
@@ -179,3 +185,5 @@ mpc_backtrace(int skip_count)
 #define mpc_backtrace /* */
 
 #endif /* HAVE_BACKTRACE */
+
+#endif

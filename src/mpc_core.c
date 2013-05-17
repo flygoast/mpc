@@ -222,13 +222,14 @@ mpc_core_process_notify(mpc_event_loop_t *el, int fd, void *data, int mask)
             }
 
             mpc_delete_file_event(el, fd, MPC_READABLE);
+            close(fd);
             mpc_event_stop(el, 0);
             return;
         }
 
         if (ins->replay) {
             if (ins->stat->start == 0) {
-                printf("start mpc\n");
+                printf("start mpc\n\n");
                 ins->stat->start = mpc_time_us();
             }
 
@@ -253,13 +254,7 @@ mpc_core_process_notify(mpc_event_loop_t *el, int fd, void *data, int mask)
                                  "host: \"%V\" uri: \"%V\"",
                               mpc_url->url_id, &mpc_url->host, &mpc_url->uri);
     
-                if (mpc_http_process_request(mpc_http) != MPC_OK) {
-                    mpc_log_err(0, "process url \"http://%V%V\" failed, "
-                                   "ignored",
-                                &mpc_url->host, &mpc_url->uri);
-                    mpc_url_put(mpc_url);
-                    mpc_http_put(mpc_http);
-                }
+                mpc_http_process_request(mpc_http);
             }
 
             count = __sync_fetch_and_add(&mpc_task_total, 0);
@@ -298,7 +293,10 @@ mpc_core_process_cron(mpc_event_loop_t *el, int64_t id, void *data)
     mpc_instance_t   *ins = (mpc_instance_t *)data;
 
     if (ins->replay) {
-        mpc_core_notify(ins);
+        if (mpc_core_notify(ins) < 0) {
+            mpc_log_err(errno, "write pipe (%d) failed", 
+                        ins->self_pipe[1]);
+        }
 
     } else {
         if (start_bench) {
@@ -394,16 +392,18 @@ mpc_core_submit(void *arg)
                     continue;
                 }
     
+                /*
                 mpc_log_debug(0, "parse url (%d), host: \"%V\" uri: \"%V\"",
                               mpc_url->url_id, &mpc_url->host, &mpc_url->uri);
+                */
     
                 mpc_url_task_insert(mpc_url);
     
                 if (mpc_core_notify(ins) < 0) {
-                    mpc_log_emerg(errno, "write pipe (%d) failed", 
-                                  ins->self_pipe[1]);
-                    exit(1);
+                    mpc_log_err(errno, "write pipe (%d) failed", 
+                               ins->self_pipe[1]);
                 }
+
                 n++;
                 sched_yield();
             }
@@ -454,8 +454,10 @@ mpc_core_submit(void *arg)
                     continue;
                 }
     
+                /*
                 mpc_log_debug(0, "parse url (%d), host: \"%V\" uri: \"%V\"",
                               mpc_url->url_id, &mpc_url->host, &mpc_url->uri);
+                */
                 mpc_url->no_put = 1;
                 *mpc_url_p = mpc_url;
             }
@@ -466,9 +468,8 @@ mpc_core_submit(void *arg)
             }
 
             if (mpc_core_notify(ins) < 0) {
-                mpc_log_emerg(errno, "write pipe (%d) failed", 
-                              ins->self_pipe[1]);
-                exit(1);
+                mpc_log_err(errno, "write pipe (%d) failed", 
+                            ins->self_pipe[1]);
             }
 
             sched_yield();
