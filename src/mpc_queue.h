@@ -76,11 +76,15 @@
  * $FreeBSD: src/sys/sys/queue.h,v 1.73 2010/02/20 01:05:30 emaste Exp $
  */
 
+
 #ifndef __MPC_QUEUE_H_INCLUDED__
 #define __MPC_QUEUE_H_INCLUDED__
 
 
+#ifdef __linux__
 #define __offsetof(type, field) ((size_t)(&((type *)NULL)->field))
+#endif
+
 
 /*
  * This file defines five types of data structures: singly-linked lists,
