@@ -188,8 +188,6 @@ static void mpc_http_release(mpc_http_t *http);
 void
 mpc_http_reset_bulk(mpc_http_t *http)
 {
-    mpc_log_debug(0, "mpc_http_reset_bulk: %p", http);
-
     mpc_conn_reset(http->conn);
 
     http->buf = NULL;
@@ -221,8 +219,6 @@ void
 mpc_http_reset(mpc_http_t *http)
 {
     ASSERT(http->magic == MPC_HTTP_MAGIC);
-
-    mpc_log_debug(0, "mpc_http_reset: %p", http);
 
     http->conn = NULL;
     http->url = NULL;
@@ -261,11 +257,7 @@ mpc_http_get_used(void)
 mpc_http_t *
 mpc_http_get(void)
 {
-    mpc_http_t  *http, *cur;
-
-    TAILQ_FOREACH(cur, &mpc_http_free_queue, next) {
-        mpc_log_debug(0, "mpc_http_free_queue: %p", cur);
-    }
+    mpc_http_t  *http;
 
     mpc_http_used++;
 
@@ -315,13 +307,7 @@ mpc_http_free(mpc_http_t *http)
 void
 mpc_http_put(mpc_http_t *http)
 {
-    mpc_http_t *cur;
-
     mpc_log_debug(0, "mpc_http_put: %p", http);
-
-    TAILQ_FOREACH(cur, &mpc_http_free_queue, next) {
-        mpc_log_debug(0, "mpc_http_free_queue: %p", cur);
-    }
 
     mpc_http_used--;
 
@@ -330,10 +316,6 @@ mpc_http_put(mpc_http_t *http)
 
     mpc_http_reset(http);
 
-    mpc_http_nfree++;
-    TAILQ_INSERT_HEAD(&mpc_http_free_queue, http, next);
-
-#if 0
     if (mpc_http_max_nfree != 0 && mpc_http_nfree + 1 > mpc_http_max_nfree) {
         mpc_http_free(http);
 
@@ -341,7 +323,6 @@ mpc_http_put(mpc_http_t *http)
         mpc_http_nfree++;
         TAILQ_INSERT_HEAD(&mpc_http_free_queue, http, next);
     }
-#endif
 }
 
 
@@ -712,11 +693,14 @@ mpc_http_process_connect(mpc_event_loop_t *el, int fd, void *data, int mask)
     mpc_log_debug(0, "*%ud, mpc_http_process_connect: %p, fd: %d, conn->fd: %d",
                   http->id, http, fd, conn->fd);
 
-    http->bench.connected = mpc_time_us();
-
-    mpc_log_debug(0, "*%ud, connecting time: %uLms, %p",
-                  http->id, (http->bench.connected - http->bench.start) / 1000,
-                  http);
+    if (http->bench.connected == 0) {
+        http->bench.connected = mpc_time_us();
+    
+        mpc_log_debug(0, "*%ud, connecting time: %uLms, %p",
+                      http->id, 
+                      (http->bench.connected - http->bench.start) / 1000,
+                      http);
+    }
 
     conn->connected = 1;
     conn->connecting = 0;
