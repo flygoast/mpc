@@ -107,6 +107,8 @@ struct mpc_http_s {
     uint8_t                 *header_end;
     int                      content_length_n;
     int                      content_length_received;
+    int                      size;
+    int                      length;
     mpc_http_bench_t         bench;
     unsigned                 need_redirect:1;
     unsigned                 used:1;

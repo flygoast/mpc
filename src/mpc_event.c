@@ -483,15 +483,11 @@ mpc_process_events(mpc_event_loop_t *el, int flags)
                still valid. */
             if (fe->mask & mask & MPC_READABLE) {
                 rfired = 1;
-                mpc_log_debug(0, "process fd(%d) READABLE event, data: %p, conn: %p",
-                              fd, fe->data, ((mpc_http_t *)fe->data)->conn);
                 fe->r_file_ptr(el, fd, fe->data, mask);
             } 
 
             if (fe->mask & mask & MPC_WRITABLE) {
                 if (!rfired || fe->w_file_ptr != fe->r_file_ptr) {
-                    mpc_log_debug(0, "process fd(%d) WRITABLE event, data: %p, conn: %p",
-                                  fd, fe->data, ((mpc_http_t *)fe->data)->conn);
                     fe->w_file_ptr(el, fd, fe->data, mask);
                 }
             }

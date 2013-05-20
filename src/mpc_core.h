@@ -96,6 +96,7 @@ typedef struct mpc_stat_s mpc_stat_t;
 #define MPC_OK                  0
 #define MPC_ERROR               -1
 #define MPC_AGAIN               -2
+#define MPC_DONE                -4
 
 #define MPC_NOTUSED(V)          ((void)V)
 #define MPC_DO_NOTHING()        /* nothing */

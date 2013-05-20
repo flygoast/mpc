@@ -45,8 +45,9 @@ static void mpc_core_notify_end(mpc_instance_t *ins);
 
 
 static int start_bench = 0;
-static uint32_t mpc_task_total = 0;
-static uint32_t mpc_task_processed = 0;
+static volatile uint32_t mpc_task_total = 0;
+static volatile uint32_t mpc_task_processed = 0;
+static volatile uint32_t mpc_task_submit_over = 0;
 
 
 static void
@@ -259,7 +260,7 @@ mpc_core_process_notify(mpc_event_loop_t *el, int fd, void *data, int mask)
 
             count = __sync_fetch_and_add(&mpc_task_total, 0);
 
-            if (count == mpc_task_processed && ins->http_count == 0) {
+            if (count == mpc_task_processed && mpc_task_submit_over == 1) {
                 mpc_core_notify_end(ins);
             }
     
@@ -332,8 +333,10 @@ mpc_core_notify(mpc_instance_t *ins)
 static void
 mpc_core_notify_end(mpc_instance_t *ins)
 {
+    /*
     close(ins->self_pipe[1]);
     ins->self_pipe[1] = -1;
+    */
 }
 
 
@@ -363,6 +366,7 @@ mpc_core_submit(void *arg)
                 ptr = mpc_core_getline(buf, MPC_CONF_BUF_MAX_SIZE, fp);
     
                 if (ptr == NULL) {
+                    mpc_task_submit_over = 1;
                     break;
                 }
     

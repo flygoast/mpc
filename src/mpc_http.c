@@ -48,7 +48,8 @@ static int mpc_http_header_transfer_encoding(mpc_http_header_t *header,
     mpc_http_t *http, void *data);
 static int mpc_http_header_location(mpc_http_header_t *header, 
     mpc_http_t *http, void *data);
-
+static int mpc_http_parse_chunked(mpc_http_t *http);
+static int mpc_http_discard_chunk(mpc_http_t *http);
 
 static mpc_str_t http_methods[] = {
     mpc_string("GET"),
@@ -158,6 +159,7 @@ int mpc_http_header_transfer_encoding(mpc_http_header_t *header,
                            sizeof("chunked") - 1) == 0)
     {
         http->chunked = 1;
+        http->content_length_n = -1;
         return MPC_OK;
     }
 
@@ -211,6 +213,8 @@ mpc_http_reset_bulk(mpc_http_t *http)
     http->header_end = NULL;
     http->content_length_n = 0;
     http->content_length_received = 0;
+    http->size = 0;
+    http->length = 0;
     http->need_redirect = 0;
 }
 
@@ -242,6 +246,8 @@ mpc_http_reset(mpc_http_t *http)
     http->header_end = NULL;
     http->content_length_n = 0;
     http->content_length_received = 0;
+    http->size = 0;
+    http->length = 0;
     http->need_redirect = 0;
     http->chunked = 0;
 }
@@ -269,8 +275,6 @@ mpc_http_get(void)
         TAILQ_REMOVE(&mpc_http_free_queue, http, next);
         ASSERT(http->magic == MPC_HTTP_MAGIC);
 
-        mpc_log_debug(0, "mpc_http_get from queue: %p", http);
-
     } else {
         http = mpc_alloc(sizeof(*http));
         if (http == NULL) {
@@ -279,8 +283,6 @@ mpc_http_get(void)
         }
 
         http->used = 0;
-
-        mpc_log_debug(0, "mpc_http_get from mpc_alloc: %p", http);
 
         SET_MAGIC(http, MPC_HTTP_MAGIC);
     }
@@ -298,8 +300,6 @@ mpc_http_get(void)
 static void
 mpc_http_free(mpc_http_t *http)
 {
-    mpc_log_debug(0, "mpc_http_free: %p", http);
-
     mpc_free(http);
 }
 
@@ -446,8 +446,14 @@ mpc_http_parse_url(uint8_t *url, size_t n, mpc_url_t *mpc_url)
     }
 
     mpc_url->no_resolve = 0;
-    if (mpc_url->host.len == 0 || mpc_url->uri.len == 1) {
+    if (mpc_url->host.len == 0) {
         return MPC_ERROR;
+    }
+
+    if (mpc_url->uri.len == 1) {
+        *url++ = '/';
+        *url++ = '\0';
+        mpc_url->uri.data = url - 2;
     }
 
     if (mpc_url->port == 0) {
@@ -465,8 +471,6 @@ mpc_http_process_request(mpc_http_t *mpc_http)
     mpc_instance_t  *ins = mpc_http->ins;
 
     ASSERT(mpc_url != NULL);
-
-    mpc_log_debug(0, "mpc_http_process_request: %p", mpc_http);
 
     if (ins->use_dst_addr) {
         if (mpc_http_create_request((char *)&ins->dst_addr.sin_addr, mpc_http)
@@ -844,28 +848,80 @@ parse_headers:
     }
 
     http->phase = MPC_HTTP_PARSE_BODY;
+    http->state = 0;
 
 parse_body:
 
-    rc = mpc_http_discard_body(http);
-    if (rc == MPC_ERROR) {
-        mpc_log_err(0, "*%ud, parse body failed, %p",
-                    http->id, http);
-        mpc_delete_file_event(el, fd, MPC_READABLE);
-        mpc_http_release(http);
-        return;
+    if (http->chunked) {
+        for ( ;; ) {
 
-    } else if (rc == MPC_AGAIN) {
-        if (conn->eof) {
-            mpc_log_err(0, "*%ud, connection closed by server prematurely"
-                         ", %p",
-                         http->id, http);
+            rc = mpc_http_parse_chunked(http);
+
+            if (rc == MPC_OK) {
+
+                /* a chunk has been parsed successfully */
+
+                mpc_log_debug(0, "*%ud, parse a chunk", http->id);
+
+                rc = mpc_http_discard_chunk(http);
+                if (rc == MPC_OK) {
+                    continue;
+
+                } else if (rc == MPC_AGAIN) {
+                    return;
+
+                } else {
+                    mpc_log_err(0, "*%ud, discard chunk failed", http->id);
+                    mpc_delete_file_event(el, fd, MPC_READABLE);
+                    mpc_http_release(http);
+                    return;
+                }
+
+                continue;
+            }
+
+            if (rc == MPC_DONE) {
+
+                /* a whole response has been parsed successfully */
+
+                mpc_log_debug(0, "*%ud, parse a whole chunked response", http->id);
+                goto done;
+            }
+
+            if (rc == MPC_AGAIN) {
+                return;
+            }
+
+            /* invalid response */
+            mpc_log_err(0, "*%ud, invalid chunked response");
             mpc_delete_file_event(el, fd, MPC_READABLE);
             mpc_http_release(http);
+            return;
         }
 
-        mpc_conn_buf_rewind(http->conn);
-        return;
+    } else {
+
+        rc = mpc_http_discard_body(http);
+
+        if (rc == MPC_ERROR) {
+            mpc_log_err(0, "*%ud, parse body failed, %p",
+                        http->id, http);
+            mpc_delete_file_event(el, fd, MPC_READABLE);
+            mpc_http_release(http);
+            return;
+    
+        } else if (rc == MPC_AGAIN) {
+            if (conn->eof) {
+                mpc_log_err(0, "*%ud, connection closed by server prematurely"
+                             ", %p",
+                             http->id, http);
+                mpc_delete_file_event(el, fd, MPC_READABLE);
+                mpc_http_release(http);
+            }
+    
+            mpc_conn_buf_rewind(http->conn);
+            return;
+        }
     }
 
 done:
@@ -1478,6 +1534,34 @@ mpc_http_parse_headers(mpc_http_t *http)
 
 
 static int
+mpc_http_discard_chunk(mpc_http_t *http)
+{
+    mpc_buf_t *buf = http->buf;
+    
+    while (buf) {
+        if (buf->last - buf->pos >= http->size) {
+            http->content_length_received += http->size;
+            buf->pos += http->size;
+            http->size = 0;
+            return MPC_OK;
+
+        } else {
+            http->content_length_received += buf->last - buf->pos;
+            buf->pos = buf->last;
+            http->size -= buf->last - buf->pos;
+        }
+
+        if (buf->pos == buf->last) {
+            buf = STAILQ_NEXT(buf, next);
+            http->buf = buf;
+        }
+    }
+
+    return MPC_AGAIN;
+}
+
+
+static int
 mpc_http_discard_body(mpc_http_t *http)
 {
     mpc_buf_t *buf = http->buf;
@@ -1517,7 +1601,6 @@ mpc_http_discard_body(mpc_http_t *http)
 }
 
 
-#if 0
 static int
 mpc_http_parse_chunked(mpc_http_t *http)
 {
@@ -1553,7 +1636,7 @@ mpc_http_parse_chunked(mpc_http_t *http)
             case sw_chunk_start:
                 if (ch > '0' && ch < '9') {
                     state = sw_chunk_size;
-                    size = ch - '0';
+                    http->size = ch - '0';
                     break;
                 }
 
@@ -1561,7 +1644,7 @@ mpc_http_parse_chunked(mpc_http_t *http)
 
                 if (c >= 'a' && c <= 'f') {
                     state = sw_chunk_size;
-                    size = c - 'a' + 10;
+                    http->size = c - 'a' + 10;
                     break;
                 }
 
@@ -1569,25 +1652,25 @@ mpc_http_parse_chunked(mpc_http_t *http)
 
             case sw_chunk_size:
                 if (ch >= '0' && ch <= '9') {
-                    size = size * 16 + (ch - '0');
+                    http->size = http->size * 16 + (ch - '0');
                     break;
                 }
 
                 c = (uint8_t)(ch | 0x20);
 
                 if (c >= 'a' && c <= 'f') {
-                    size = size * 16 + (c - 'a' + 10);
+                    http->size = http->size * 16 + (c - 'a' + 10);
                     break;
                 }
 
-                if (size == 0) {
+                if (http->size == 0) {
 
                     switch (ch) {
                     case CR:
                         state = sw_last_chunk_extension_almost_done;
                         break;
                     case LF:
-                        stae = sw_trailer;
+                        state = sw_trailer;
                         break;
                     case ';':
                     case ' ':
@@ -1672,7 +1755,7 @@ mpc_http_parse_chunked(mpc_http_t *http)
 
             case sw_last_chunk_extension_almost_done:
                 if (ch == LF) {
-                    state = sw_trailter;
+                    state = sw_trailer;
                     break;
                 }
                 goto invalid;
@@ -1689,7 +1772,7 @@ mpc_http_parse_chunked(mpc_http_t *http)
                 }
                 break;
 
-            case sw_trailter_almost_done:
+            case sw_trailer_almost_done:
                 if (ch == LF) {
                     goto done;
                 }
@@ -1726,49 +1809,52 @@ data:
     switch (state) {
     
     case sw_chunk_start:
-        length = 3; /* "0" LF LF */
+        http->length = 3; /* "0" LF LF */
         break;
 
     case sw_chunk_size:
-        length = 2 /* LF LF */
-                 + (size ? size + 4 /* LF "0" LF LF */ : 0);
+        http->length = 2 /* LF LF */
+                       + (http->size ? http->size + 4 /* LF "0" LF LF */ : 0);
         break;
 
     case sw_chunk_extension:
     case sw_chunk_extension_almost_done:
-        length = 1 /* LF */ + size + 4 /* LF "0" LF LF */;
+        http->length = 1 /* LF */ + http->size + 4 /* LF "0" LF LF */;
         break;
 
     case sw_chunk_data:
-        length = size + 4; /* LF "0" LF LF */
+        http->length = http->size + 4; /* LF "0" LF LF */
         break;
 
     case sw_after_data:
     case sw_after_data_almost_done:
-        length = 4; /* LF "0" LF LF */
+        http->length = 4; /* LF "0" LF LF */
         break;
 
     case sw_last_chunk_extension:
     case sw_last_chunk_extension_almost_done:
-        length = 2; /* LF LF */
+        http->length = 2; /* LF LF */
+        break;
+
+    case sw_trailer:
+    case sw_trailer_almost_done:
+        http->length = 1; /* LF */
         break;
 
     case sw_trailer_header:
     case sw_trailer_header_almost_done:
-        length = 2; /* LF LF */
+        http->length = 2; /* LF LF */
         break;
     }
 
     return rc;
 
 done:
-    return MPC_OK;
+    return MPC_DONE;
 
 invalid:
     return MPC_ERROR;
 }
-
-#endif
 
 
 void
@@ -1808,10 +1894,6 @@ mpc_http_create_missing_requests(mpc_instance_t *ins)
         mpc_http->ins = ins;
         mpc_http->url = mpc_url;
     
-        mpc_log_debug(0, "receive http url(%d), "
-                         "host: \"%V\" uri: \"%V\"",
-                      mpc_url->url_id, &mpc_url->host, &mpc_url->uri);
-        
         mpc_http_process_request(mpc_http);
     }
 }
@@ -1839,4 +1921,3 @@ mpc_http_get_method(char *method)
 
     return MPC_ERROR;
 }
-
