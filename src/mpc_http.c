@@ -862,7 +862,8 @@ parse_body:
 
                 /* a chunk has been parsed successfully */
 
-                mpc_log_debug(0, "*%ud, parse a chunk", http->id);
+                mpc_log_debug(0, "*%ud, parse a chunk, %x", http->id,
+                              http->size);
 
                 rc = mpc_http_discard_chunk(http);
                 if (rc == MPC_OK) {
@@ -1548,8 +1549,8 @@ mpc_http_discard_chunk(mpc_http_t *http)
 
         } else {
             http->content_length_received += buf->last - buf->pos;
-            buf->pos = buf->last;
             http->size -= buf->last - buf->pos;
+            buf->pos = buf->last;
         }
 
         if (buf->pos == buf->last) {
