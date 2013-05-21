@@ -113,6 +113,7 @@ struct mpc_http_s {
     unsigned                 need_redirect:1;
     unsigned                 used:1;
     unsigned                 chunked:1;
+    unsigned                 discard_chunk:1;
 };
 
 
