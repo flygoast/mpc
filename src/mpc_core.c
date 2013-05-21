@@ -219,7 +219,7 @@ mpc_core_process_notify(mpc_event_loop_t *el, int fd, void *data, int mask)
         if (n == 0) {
             //mpc_log_err(0, "pipe write end abnormal closed");
             if (ins->stat->stop == 0) {
-                ins->stat->stop = mpc_time_us();
+                ins->stat->stop = mpc_time_ms();
             }
 
             mpc_delete_file_event(el, fd, MPC_READABLE);
@@ -231,7 +231,7 @@ mpc_core_process_notify(mpc_event_loop_t *el, int fd, void *data, int mask)
         if (ins->replay) {
             if (ins->stat->start == 0) {
                 printf("start mpc\n\n");
-                ins->stat->start = mpc_time_us();
+                ins->stat->start = mpc_time_ms();
             }
 
             while (ins->http_count < ins->concurrency) {
@@ -267,7 +267,7 @@ mpc_core_process_notify(mpc_event_loop_t *el, int fd, void *data, int mask)
         } else {
             start_bench = 1;
             printf("start mpc\n");
-            ins->stat->start = mpc_time_us();
+            ins->stat->start = mpc_time_ms();
         }
     }
 }
@@ -309,7 +309,7 @@ mpc_core_process_cron(mpc_event_loop_t *el, int64_t id, void *data)
         if (++cron_count >= (1000 / MPC_CRON_INTERVAL) - 1) {
             cron_count = 0;
             if (ins->stat->start != 0) {
-                if (((mpc_time_us() - ins->stat->start) / 1000 / 1000)
+                if (((mpc_time_ms() - ins->stat->start) / 1000)
                     >= ins->run_time)
                 {
                     mpc_stop();
@@ -333,10 +333,8 @@ mpc_core_notify(mpc_instance_t *ins)
 static void
 mpc_core_notify_end(mpc_instance_t *ins)
 {
-    /*
     close(ins->self_pipe[1]);
     ins->self_pipe[1] = -1;
-    */
 }
 
 

@@ -66,6 +66,24 @@ mpc_stat_init(mpc_stat_t *mpc_stat)
 }
 
 
+#if 0
+
+static void 
+mpc_stat_debug(mpc_stat_t *mpc_stat)
+{
+    printf("ok: %u\n", mpc_stat->ok);
+    printf("failed: %u\n", mpc_stat->failed);
+    printf("shortest: %lu\n", mpc_stat->shortest);
+    printf("longest: %lu\n", mpc_stat->longest);
+    printf("bytes: %lu\n", mpc_stat->bytes);
+    printf("total_time: %lu\n", mpc_stat->total_time);
+    printf("start: %lu\n", mpc_stat->start);
+    printf("stop: %lu\n", mpc_stat->stop);
+}
+
+#endif
+
+
 void
 mpc_stat_destroy(mpc_stat_t *mpc_stat)
 {
@@ -109,7 +127,7 @@ mpc_stat_get_availability(mpc_stat_t *mpc_stat)
 static double 
 mpc_stat_get_elapsed(mpc_stat_t *mpc_stat)
 {
-    return (mpc_stat->stop - mpc_stat->start) / (double)(1000 * 1000);
+    return (mpc_stat->stop - mpc_stat->start) / (double)1000;
 }
 
 
@@ -123,8 +141,7 @@ mpc_stat_get_data_transfered(mpc_stat_t *mpc_stat)
 static double
 mpc_stat_get_response_time(mpc_stat_t *mpc_stat)
 {
-    return mpc_stat->total_time / 
-           (double)((mpc_stat->ok + mpc_stat->failed) * 1000 * 1000);
+    return mpc_stat->total_time / 1000 / (double)(mpc_stat->ok + mpc_stat->failed);
 }
 
 
@@ -132,7 +149,7 @@ static double
 mpc_stat_get_transaction_rate(mpc_stat_t *mpc_stat)
 {
     return (mpc_stat->ok + mpc_stat->failed) / 
-           (double)((mpc_stat->stop - mpc_stat->start) / 1000 / 1000);
+           (double)((mpc_stat->stop - mpc_stat->start) / 1000);
 }
 
 
@@ -140,7 +157,7 @@ static double
 mpc_stat_get_throughput(mpc_stat_t *mpc_stat)
 {
     return ((mpc_stat->bytes / 1024 / 1024)) / 
-           (double)((mpc_stat->stop - mpc_stat->start) / 1000 / 1000);
+           (double)((mpc_stat->stop - mpc_stat->start) / 1000);
 }
 
 
@@ -154,14 +171,14 @@ mpc_stat_get_concurrency(mpc_stat_t *mpc_stat)
 static double
 mpc_stat_get_longest(mpc_stat_t *mpc_stat)
 {
-    return mpc_stat->longest / (double)(1000 * 1000);
+    return mpc_stat->longest / (double)1000;
 }
 
 
 static double
 mpc_stat_get_shortest(mpc_stat_t *mpc_stat)
 {
-    return mpc_stat->shortest / (double)(1000 * 1000);
+    return mpc_stat->shortest / (double)1000;
 }
     
 

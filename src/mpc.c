@@ -114,6 +114,10 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
             break;
 
         case 'l':
+            if (ins->log_file) {
+                mpc_log_stderr(0, "duplicate option '-l'");
+                return MPC_ERROR;
+            }
             ins->log_file = optarg;
             break;
 
@@ -380,7 +384,7 @@ main(int argc, char **argv)
 void
 mpc_stop()
 {
-    mpc_ins->stat->stop = mpc_time_us();
+    mpc_ins->stat->stop = mpc_time_ms();
     mpc_event_stop(mpc_ins->el, 0);
 }
 
