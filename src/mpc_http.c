@@ -216,6 +216,8 @@ mpc_http_reset_bulk(mpc_http_t *http)
     http->size = 0;
     http->length = 0;
     http->need_redirect = 0;
+    http->chunked = 0;
+    http->discard_chunk = 0;
 }
 
 
@@ -250,6 +252,7 @@ mpc_http_reset(mpc_http_t *http)
     http->length = 0;
     http->need_redirect = 0;
     http->chunked = 0;
+    http->discard_chunk = 0;
 }
 
 
@@ -307,8 +310,6 @@ mpc_http_free(mpc_http_t *http)
 void
 mpc_http_put(mpc_http_t *http)
 {
-    mpc_log_debug(0, "mpc_http_put: %p", http);
-
     mpc_http_used--;
 
     ASSERT(http->used == 1);
@@ -553,8 +554,8 @@ mpc_http_create_request(char *addr, mpc_http_t *mpc_http)
 
     mpc_http->id = ++mpc_http_id;
 
-    mpc_log_debug(0, "*%ud, mpc_http_create_request: %p, http://%V%V",
-                  mpc_http->id, mpc_http, &mpc_url->host, &mpc_url->uri);
+    mpc_log_debug(0, "*%ud, mpc_http_create_request, http://%V%V",
+                  mpc_http->id, &mpc_url->host, &mpc_url->uri);
 
     rcv_buf = NULL;
     snd_buf = NULL;
@@ -564,7 +565,7 @@ mpc_http_create_request(char *addr, mpc_http_t *mpc_http)
     if (mpc_http->conn == NULL) {
         mpc_http->conn = mpc_conn_get();
         if (mpc_http->conn == NULL) {
-            mpc_log_emerg(0, "*%ud, get conn failed: %p", mpc_http->id, mpc_http);
+            mpc_log_emerg(0, "*%ud, get conn failed", mpc_http->id);
             goto failed;
         }
     }
@@ -574,8 +575,7 @@ mpc_http_create_request(char *addr, mpc_http_t *mpc_http)
     if (conn->rcv_buf == NULL) {
         conn->rcv_buf = mpc_buf_get();
         if (conn->rcv_buf == NULL) {
-            mpc_log_emerg(0, "*%ud, get buf failed: %p",
-                          mpc_http->id, mpc_http);
+            mpc_log_emerg(0, "*%ud, get buf failed", mpc_http->id);
             goto failed;
         }
 
@@ -587,8 +587,7 @@ mpc_http_create_request(char *addr, mpc_http_t *mpc_http)
     if (conn->snd_buf == NULL) {
         conn->snd_buf = mpc_buf_get();
         if (conn->snd_buf == NULL) {
-            mpc_log_emerg(0, "*%ud, get buf failed: %p",
-                          mpc_http->id, mpc_http);
+            mpc_log_emerg(0, "*%ud, get buf failed", mpc_http->id);
             goto failed;
         }
     
@@ -856,20 +855,28 @@ parse_body:
     if (http->chunked) {
         for ( ;; ) {
 
-            rc = mpc_http_parse_chunked(http);
+            rc = MPC_OK;
+
+            if (!http->discard_chunk) {
+                rc = mpc_http_parse_chunked(http);
+
+                if (rc == MPC_OK) {
+                    /* a chunk has been parsed successfully */
+
+                    mpc_log_debug(0, "*%ud, parse a chunk, %xd", 
+                                  http->id,
+                                  http->size);
+                }
+            }
 
             if (rc == MPC_OK) {
-
-                /* a chunk has been parsed successfully */
-
-                mpc_log_debug(0, "*%ud, parse a chunk, %x", http->id,
-                              http->size);
-
                 rc = mpc_http_discard_chunk(http);
                 if (rc == MPC_OK) {
+                    http->discard_chunk = 0;
                     continue;
 
                 } else if (rc == MPC_AGAIN) {
+                    http->discard_chunk = 1;
                     return;
 
                 } else {
@@ -895,7 +902,7 @@ parse_body:
             }
 
             /* invalid response */
-            mpc_log_err(0, "*%ud, invalid chunked response");
+            mpc_log_err(0, "*%ud, invalid chunked response", http->id);
             mpc_delete_file_event(el, fd, MPC_READABLE);
             mpc_http_release(http);
             return;
@@ -1627,16 +1634,20 @@ mpc_http_parse_chunked(mpc_http_t *http)
 
     state = http->state;
 
+    if (state == sw_chunk_data && http->size == 0) {
+        state = sw_after_data;
+    }
+
     rc = MPC_AGAIN;
 
     while (buf) {
-        while (buf->pos < buf->last) {
-            ch = *buf->pos++;
+        for ( ; buf->pos < buf->last; buf->pos++) {
+            ch = *buf->pos;
 
             switch (state) {
 
             case sw_chunk_start:
-                if (ch > '0' && ch < '9') {
+                if (ch >= '0' && ch <= '9') {
                     state = sw_chunk_size;
                     http->size = ch - '0';
                     break;
