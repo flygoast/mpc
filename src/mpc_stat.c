@@ -185,6 +185,11 @@ mpc_stat_get_shortest(mpc_stat_t *mpc_stat)
 void
 mpc_stat_print(mpc_stat_t *mpc_stat)
 {
+    if (mpc_stat->ok + mpc_stat->failed == 0) {
+        printf("No transaction completed" CRLF);
+        return;
+    }
+
     printf("Transactions:                       %12u hits" CRLF
            "Availability:                       %12.2f %%" CRLF
            "Elapsed time:                       %12.2f secs" CRLF
@@ -252,6 +257,10 @@ mpc_stat_result_record(int fd, mpc_stat_t *mpc_stat, char *mark)
     struct tm   keepsake;
     struct tm  *tmp;
     time_t      now;
+
+    if (mpc_stat->ok + mpc_stat->failed == 0) {
+        return MPC_OK;
+    }
 
     if (mark != NULL) {
         snprintf(entry, sizeof(entry), "**** %s ****\n", mark);

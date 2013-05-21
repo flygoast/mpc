@@ -153,6 +153,7 @@ mpc_core_run(mpc_instance_t *ins)
         }
 
         mpc_net_nonblock(ins->self_pipe[0]);
+        mpc_net_nonblock(ins->self_pipe[1]);
 
         if (mpc_create_file_event(ins->el, ins->self_pipe[0], MPC_READABLE, 
                                   mpc_core_process_notify, (void *)ins)
