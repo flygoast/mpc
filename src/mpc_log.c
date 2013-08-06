@@ -34,9 +34,6 @@
 static mpc_logger_t     mpc_logger;
 
 
-static uint8_t *mpc_log_errno(uint8_t *buf, uint8_t *last, int err);
-
-
 static mpc_str_t err_levels[] = {
     mpc_string("emerg"),
     mpc_string("alert"),
@@ -205,7 +202,7 @@ mpc_log_core(const char *file, int line, int level, int err,
 }
 
 
-static uint8_t *
+uint8_t *
 mpc_log_errno(uint8_t *buf, uint8_t *last, int err)
 {
     if (buf > last - 50) {

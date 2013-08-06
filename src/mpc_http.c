@@ -621,13 +621,11 @@ mpc_http_create_request(char *addr, mpc_http_t *mpc_http)
     
     sockfd = mpc_net_tcp_connect(addr, mpc_url->port, MPC_NET_NONBLOCK);
     if (sockfd == MPC_ERROR) {
-        mpc_log_err(errno, "*%ud, tcp connect failed: %p",
-                    mpc_http->id, mpc_http);
+        mpc_log_err(errno, "*%ud, tcp connect failed", mpc_http->id);
         goto failed;
     }
 
-    mpc_log_debug(0, "*%ud, socket fd: %d, %p",
-                  mpc_http->id, sockfd, mpc_http);
+    mpc_log_debug(0, "*%ud, socket fd: %d", mpc_http->id, sockfd);
     conn->connecting = 1;
     conn->fd = sockfd;
 
@@ -658,7 +656,7 @@ mpc_http_release(mpc_http_t *http)
 {
     ASSERT(http->magic == MPC_HTTP_MAGIC);
 
-    mpc_log_debug(0, "*%ud, mpc_http_release: %p", http->id, http);
+    mpc_log_debug(0, "*%ud, mpc_http_release", http->id);
 
     if (http->url != NULL) {
         if (http->url->no_put == 0) {
@@ -699,10 +697,9 @@ mpc_http_process_connect(mpc_event_loop_t *el, int fd, void *data, int mask)
     if (http->bench.connected == 0) {
         http->bench.connected = mpc_time_ms();
     
-        mpc_log_debug(0, "*%ud, connecting time: %uLms, %p",
+        mpc_log_debug(0, "*%ud, connecting time: %uLms",
                       http->id, 
-                      http->bench.connected - http->bench.start,
-                      http);
+                      http->bench.connected - http->bench.start);
     }
 
     conn->connected = 1;

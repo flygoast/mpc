@@ -42,7 +42,7 @@
 
 #define MPC_NOMORE       -1
 
-#define MPC_DEFAULT_EVENT_SIZE  10240
+#define MPC_DEFAULT_EVENT_SIZE  65535
 
 
 typedef struct mpc_event_loop_s mpc_event_loop_t;

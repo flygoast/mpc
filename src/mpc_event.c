@@ -483,11 +483,13 @@ mpc_process_events(mpc_event_loop_t *el, int flags)
                still valid. */
             if (fe->mask & mask & MPC_READABLE) {
                 rfired = 1;
+                mpc_log_debug(0, "process read event, fd: %d", fd);
                 fe->r_file_ptr(el, fd, fe->data, mask);
             } 
 
             if (fe->mask & mask & MPC_WRITABLE) {
                 if (!rfired || fe->w_file_ptr != fe->r_file_ptr) {
+                    mpc_log_debug(0, "process write event, fd: %d", fd);
                     fe->w_file_ptr(el, fd, fe->data, mask);
                 }
             }

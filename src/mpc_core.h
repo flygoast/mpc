@@ -78,6 +78,7 @@ typedef struct mpc_stat_s mpc_stat_t;
 #include <mpc_url.h>
 #include <mpc_buf.h>
 #include <mpc_connection.h>
+#include <mpc_conf.h>
 #include <mpc_http.h>
 #include <mpc_stat.h>
 
@@ -90,8 +91,8 @@ typedef struct mpc_stat_s mpc_stat_t;
 #define MPC_DEFAULT_CONF_PATH   "conf/mpc.conf"
 #define MPC_DEFAULT_PORT        17748
 #define MPC_DEFAULT_CONCURRENCY 50
-#define MPC_MAX_CONCURRENCY     10000
-#define MPC_MAX_OPENFILES       32768
+#define MPC_MAX_CONCURRENCY     200000
+#define MPC_MAX_OPENFILES       327680
 
 #define MPC_OK                  0
 #define MPC_ERROR               -1
@@ -112,8 +113,15 @@ typedef struct mpc_stat_s mpc_stat_t;
 #define MPC_MIN(a, b)           ((a > b) ? (b) : (a))
 
 #define MPC_TEMP_BUF_SIZE       512
-#define MPC_CONF_BUF_MAX_SIZE   1024
+#define MPC_CONF_BUF_MAX_SIZE   8192
 #define MPC_CRON_INTERVAL       50  /* miliseconds */
+
+
+#define MPC_INVALID_FILE        -1
+#define MPC_FILE_ERROR          -1
+
+
+#define mpc_file_size(sb)       (sb)->st_size
 
 
 #ifdef WITH_DEBUG
@@ -123,6 +131,9 @@ typedef struct mpc_stat_s mpc_stat_t;
 #define ASSERT(x)               /* nothing */
 #define SET_MAGIC(s, m)         /* nothing */
 #endif
+
+
+typedef int64_t                 mpc_flag_t;
 
 
 struct mpc_instance_s {

@@ -73,6 +73,7 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
 {
     int              c;
     struct hostent  *he;
+    mpc_str_t        t;
 
     opterr = 0;
 
@@ -194,7 +195,10 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
             break;
 
         case 't':
-            ins->run_time = mpc_parse_time(optarg, strlen(optarg));
+            t.data = (uint8_t *) optarg;
+            t.len = mpc_strlen(optarg);
+
+            ins->run_time = mpc_parse_time(&t, 1);
             if (ins->run_time == MPC_ERROR) {
                 mpc_log_stderr(0, 
                           "option '-t' requires a valid time expression" CRLF

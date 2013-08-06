@@ -18,6 +18,7 @@ OO = mpc.o 				\
 	 mpc_url.o			\
 	 mpc_buf.o 			\
 	 mpc_connection.o 	\
+	 mpc_conf.o 		\
 	 mpc_http.o			\
 	 mpc_stat.o
 	 

@@ -33,7 +33,7 @@
 
 
 #define MPC_URL_MAGIC           0x4d55524c  /* "MURL" */
-#define MPC_URL_BUF_SIZE        256
+#define MPC_URL_BUF_SIZE        8192
 #define MPC_URL_MAX_NFREE       128
 
 

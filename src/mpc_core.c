@@ -30,9 +30,10 @@
 
 #include <mpc_core.h>
 
-
+/*
 static void mpc_core_process_accept(mpc_event_loop_t *el, int fd, void *data,
     int mask);
+*/
 static void mpc_core_process_notify(mpc_event_loop_t *el, int fd, void *data,
     int mask);
 static int mpc_core_process_cron(mpc_event_loop_t *el, int64_t id, void *data);
@@ -123,6 +124,8 @@ mpc_core_deinit(mpc_instance_t *ins)
 int
 mpc_core_run(mpc_instance_t *ins)
 {
+
+    /*
     int  listen_fd;
 
     listen_fd = mpc_net_tcp_server(ins->addr, ins->port);
@@ -138,6 +141,8 @@ mpc_core_run(mpc_instance_t *ins)
     {
         return MPC_ERROR;
     }
+
+    */
 
     if (mpc_create_time_event(ins->el, MPC_CRON_INTERVAL, 
                               mpc_core_process_cron, (void *)ins, NULL) 
@@ -175,6 +180,7 @@ mpc_core_run(mpc_instance_t *ins)
 }
 
 
+/*
 static void
 mpc_core_process_accept(mpc_event_loop_t *el, int fd, void *data, int mask)
 {
@@ -188,6 +194,7 @@ mpc_core_process_accept(mpc_event_loop_t *el, int fd, void *data, int mask)
     mpc_log_stderr(0, "Connection from %s:%d", 
                    ins->addr ? ins->addr : "0.0.0.0", ins->port);
 }
+*/
 
 
 static void
@@ -209,7 +216,7 @@ mpc_core_process_notify(mpc_event_loop_t *el, int fd, void *data, int mask)
             }
 
             if (errno != EAGAIN) {
-                mpc_log_err(errno, "read pipe (%d) failed", fd);
+                mpc_log_err(errno, "read pipe failed, fd: %d", fd);
                 mpc_delete_file_event(el, fd, MPC_READABLE);
                 mpc_event_stop(el, MPC_ERROR);
                 return;
@@ -296,8 +303,7 @@ mpc_core_process_cron(mpc_event_loop_t *el, int64_t id, void *data)
 
     if (ins->replay) {
         if (mpc_core_notify(ins) < 0) {
-            mpc_log_err(errno, "write pipe (%d) failed", 
-                        ins->self_pipe[1]);
+            mpc_log_err(errno, "write pipe failed, fd: %d", ins->self_pipe[1]);
         }
 
     } else {
@@ -403,8 +409,7 @@ mpc_core_submit(void *arg)
                 mpc_url_task_insert(mpc_url);
     
                 if (mpc_core_notify(ins) < 0) {
-                    mpc_log_err(errno, "write pipe (%d) failed", 
-                               ins->self_pipe[1]);
+                    mpc_log_err(errno, "write pipe failed, fd: %d", ins->self_pipe[1]);
                 }
 
                 n++;
@@ -471,8 +476,7 @@ mpc_core_submit(void *arg)
             }
 
             if (mpc_core_notify(ins) < 0) {
-                mpc_log_err(errno, "write pipe (%d) failed", 
-                            ins->self_pipe[1]);
+                mpc_log_err(errno, "write pipe failed, fd: %d", ins->self_pipe[1]);
             }
 
             sched_yield();

@@ -97,8 +97,7 @@ mpc_get_time(int64_t *seconds, int64_t *milliseconds)
 
 
 void
-mpc_add_milliseconds_to_now(int64_t milliseconds, 
-    int64_t *sec, int64_t *ms)
+mpc_add_milliseconds_to_now(int64_t milliseconds, int64_t *sec, int64_t *ms)
 {
     int64_t cur_sec, cur_ms, when_sec, when_ms;
 
@@ -115,82 +114,6 @@ mpc_add_milliseconds_to_now(int64_t milliseconds,
 
     *sec = when_sec;
     *ms = when_ms;
-}
-
-
-int 
-mpc_atoi(uint8_t *line, size_t n)
-{
-    int value;
-
-    if (n == 0) {
-        return MPC_ERROR;
-    }
-
-    for (value = 0; n--; line++) {
-        if (*line < '0' || *line > '9') {
-            return MPC_ERROR;
-        }
-
-        value = value * 10 + (*line - '0');
-    }
-
-    if (value < 0) {
-        return MPC_ERROR;
-    }
-
-    return value;
-}
-
-
-int
-mpc_hextoi(uint8_t *line, size_t n)
-{
-    uint8_t     c, ch;
-    int         value;
-
-    if (n == 0) {
-        return MPC_ERROR;
-    }
-
-    for (value = 0; n--; line++) {
-        ch = *line;
-
-        if (ch >= '0' && ch <= '9') {
-            value = value * 16 + (ch - '0');
-            continue;
-        }
-
-        c = (uint8_t) (ch | 0x20);
-
-        if (c >= 'a' && c <= 'f') {
-            value = value * 16 + (c - 'a' + 10);
-            continue;
-        }
-
-        return MPC_ERROR;
-    }
-
-    if (value < 0) {
-        return MPC_ERROR;
-
-    } else {
-        return value;
-    }
-}
-
-
-uint8_t *
-mpc_hex_dump(uint8_t *dst, uint8_t *src, size_t len)
-{
-    static uint8_t  hex[] = "0123456789abcdef";
-
-    while (len--) {
-        *dst++ = hex[*src >> 4];
-        *dst++ = hex[*src++ & 0xf];
-    }
-
-    return dst;
 }
 
 
@@ -217,104 +140,4 @@ mpc_time_us(void)
     ust = ((uint64_t)tv.tv_sec) * 1000000;
     ust += tv.tv_usec;
     return ust;
-}
-
-
-int64_t
-mpc_parse_time(char *str, int len)
-{
-    char       *p, *last;
-    int64_t     value, total, scale, max;
-    int         valid;
-    enum {
-        st_start = 0,
-        st_day,
-        st_hour,
-        st_min,
-        st_sec,
-        st_last
-    } step;
-
-    step = st_start;
-    valid = 0;
-    value = 0;
-    total = 0;
-    p = str;
-    last = p + len;
-
-    while (p < last) {
-        if (*p >= '0' && *p <= '9') {
-            value = value * 10 + (*p++ - '0');
-            valid = 1;
-            continue;
-        }
-
-        switch (*p++) {
-        case 'D':
-        case 'd':
-            if (step >= st_day) {
-                return MPC_ERROR;
-            }
-            step = st_day;
-            max = MPC_MAX_INT64_VALUE / (60 * 60 * 24);
-            scale = 60 * 60 * 24;
-            break;
-
-        case 'H':
-        case 'h':
-            if (step >= st_hour) {
-                return MPC_ERROR;
-            }
-            step = st_hour;
-            max = MPC_MAX_INT64_VALUE / (60 * 60);
-            scale = 60 * 60;
-            break;
-
-        case 'M':
-        case 'm':
-            if (step >= st_min) {
-                return MPC_ERROR;
-            }
-            step = st_min;
-            max = MPC_MAX_INT64_VALUE / 60;
-            scale = 60;
-            break;
-
-        case 'S':
-        case 's':
-            if (step >= st_sec) {
-                return MPC_ERROR;
-            }
-            step = st_sec;
-            max = MPC_MAX_INT64_VALUE;
-            scale = 1;
-            break;
-
-        default:
-            return MPC_ERROR;
-        }
-            
-        if (value > max) {
-            return MPC_ERROR;
-        }
-
-        total += value * scale;
-
-        if (total > MPC_MAX_INT64_VALUE) {
-            return MPC_ERROR;
-        }
-
-        value = 0;
-        scale = 1;
-
-        while (p < last && *p == ' ') {
-            p++;
-        }
-    }
-
-    if (valid) {
-        return total + value * scale;
-    }
-
-    return MPC_ERROR;
 }

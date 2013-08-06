@@ -45,8 +45,10 @@
 #define MPC_NET_NEEDATON    1
 #define MPC_NET_NONBLOCK    2
 
+
 int mpc_net_accept(int sockfd, struct sockaddr *sa, socklen_t *len);
 int mpc_net_nonblock(int fd);
+int mpc_net_tcp_keepalive(int fd);
 int mpc_net_read(int fd, uint8_t *buf, int count);
 int mpc_net_write(int fd, uint8_t *buf, int count);
 int mpc_net_tcp_server(char *ip, int port);

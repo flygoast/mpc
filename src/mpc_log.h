@@ -90,6 +90,7 @@ int mpc_log_get_level(char *log_level);
 void mpc_log_core(const char *file, int line, int level, int err, 
     const char *fmt, ...);
 void mpc_log_stderr(int err, const char *fmt, ...);
+uint8_t *mpc_log_errno(uint8_t *buf, uint8_t *last, int err);
 
 
 #endif /* __MPC_LOG_H_INCLUDED__ */

@@ -108,6 +108,19 @@ mpc_net_nonblock(int fd)
 
 
 int
+mpc_net_tcp_keepalive(int fd)
+{
+    int yes = 1;
+    if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &yes, sizeof(yes)) == -1) {
+        mpc_log_err(errno, "setsockopt SO_KEEPALIVE failed, fd: %d", fd);
+        return MPC_ERROR;
+    }
+
+    return MPC_OK;
+}
+
+
+int
 mpc_net_read(int fd, uint8_t *buf, int count)
 {
     int n, len = 0;
@@ -246,6 +259,11 @@ mpc_net_tcp_connect(char *addr, int port, int flags)
             close(sockfd);
             return MPC_ERROR;
         }
+    }
+
+    if (mpc_net_tcp_keepalive(sockfd) != MPC_OK) {
+        close(sockfd);
+        return MPC_ERROR;
     }
 
     if (connect(sockfd, (struct sockaddr *)&sa, sizeof(sa)) == -1) {

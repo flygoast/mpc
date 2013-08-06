@@ -168,13 +168,9 @@ mpc_event_api_poll(mpc_event_loop_t *el, struct timeval *tvp)
                 mask |= MPC_WRITABLE;
             }
 
-            if (e->events & EPOLLERR) {
-                mpc_log_warn(errno, "EPOLLERR occured");
-                mask |= MPC_WRITABLE;
-            }
-
-            if (e->events & EPOLLHUP) {
-                mpc_log_warn(errno, "EPOLLHUP occured");
+            if (e->events & (EPOLLERR|EPOLLHUP)) {
+                mpc_log_debug(0, "epoll_wait() error on fd: %d ev: %04XD",
+                              e->data.fd, e->events);
                 mask |= MPC_WRITABLE;
             }
 
