@@ -37,17 +37,39 @@ static mpc_command_t  mpc_internal_commands[] = {
 };
 
 
-/*
 char *
-mpc_conf_param(mpc_conf_t *cf)
+mpc_conf_param(mpc_conf_t *cf, mpc_str_t *param)
 {
     char             *rv;
-    mpc_str_t        *param;
     mpc_buf_t         b;
     mpc_conf_file_t   conf_file;
 
+    if (param->len == 0) {
+        return MPC_CONF_OK;
+    }
+
+    mpc_memzero(&conf_file, sizeof(mpc_conf_file_t));
+
+    mpc_memzero(&b, sizeof(mpc_buf_t));
+
+    b.start = param->data;
+    b.pos = param->data;
+    b.last = param->data + param->len;
+    b.end = b.last;
+
+    conf_file.file.fd = MPC_INVALID_FILE;
+    conf_file.file.name.data = NULL;
+    conf_file.line = 0;
+
+    cf->conf_file = &conf_file;
+    cf->conf_file->buffer = &b;
+
+    rv = mpc_conf_parse(cf, NULL);
+
+    cf->conf_file = NULL;
+
+    return rv;
 }
-*/
 
 
 static ssize_t

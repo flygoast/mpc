@@ -178,6 +178,7 @@ uint8_t *mpc_hex_dump(uint8_t *dst, uint8_t *src, size_t len);
 
 void mpc_conf_log_error(uint64_t level, mpc_conf_t *cf, int err, 
     const char *fmt, ...);
+char *mpc_conf_param(mpc_conf_t *cf, mpc_str_t *param);
 char *mpc_conf_parse(mpc_conf_t *cf, mpc_str_t *filename);
 void mpc_conf_free(mpc_conf_t *cf);
 
