@@ -10,6 +10,7 @@ static int64_t mpc_conf_handler(mpc_conf_t *cf, int64_t last);
 static int64_t mpc_conf_read_token(mpc_conf_t *cf);
 //static int64_t mpc_conf_test_full_name(mpc_str_t *name);
 static char *mpc_conf_include(mpc_conf_t *cf, mpc_command_t *cmd, void *conf);
+static void mpc_conf_free_args(mpc_array_t *args);
 
 
 static uint64_t argument_number[] = {
@@ -486,11 +487,14 @@ mpc_conf_read_token(mpc_conf_t *cf)
     s_quoted = 0;
     d_quoted = 0;
 
+    if (cf->args != NULL) {
+        mpc_conf_free_args(cf->args);
+        cf->args = NULL;
+    }
+
+    cf->args = mpc_array_create(4, sizeof(mpc_str_t));
     if (cf->args == NULL) {
-        cf->args = mpc_array_create(4, sizeof(mpc_str_t));
-        if (cf->args == NULL) {
-            return MPC_ERROR;
-        }
+        return MPC_ERROR;
     }
 
     b = cf->conf_file->buffer;
@@ -869,26 +873,36 @@ mpc_conf_log_error(uint64_t level, mpc_conf_t *cf, int err,
 }
 
 
+static void
+mpc_conf_free_args(mpc_array_t *args)
+{
+    int         i;
+    mpc_str_t  *arg;
+
+    if (args != NULL) {
+        arg = args->elem;
+        for (i = 0; i < args->nelem; i++) {
+            mpc_free(arg[i].data);
+            arg[i].data = NULL;
+            arg[i].len = 0;
+        }
+
+        mpc_array_destroy(args);
+    }
+}
+
+
 void
 mpc_conf_free(mpc_conf_t *cf)
 {
-    int64_t       i, j;
+    int64_t       i;
     mpc_array_t  *arg_array, **args_array;
-    mpc_str_t    *arg;
 
     if (cf->args_array) {
         args_array = cf->args_array->elem;
         for (i = 0; i < cf->args_array->nelem; i++) {
             arg_array = args_array[i];
-            arg = arg_array->elem;
-
-            for (j = 0; j < arg_array->nelem; j++) {
-                mpc_free(arg[j].data);
-                arg[j].data = NULL;
-                arg[j].len = 0;
-            }
-
-            mpc_array_destroy(arg_array);
+            mpc_conf_free_args(arg_array);
         }
         mpc_array_destroy(cf->args_array);
     }
