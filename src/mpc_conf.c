@@ -908,7 +908,7 @@ mpc_conf_free(mpc_conf_t *cf)
     }
 
     if (cf->args) {
-        mpc_array_destroy(cf->args);
+        mpc_conf_free_args(cf->args);
     }
 }
 
