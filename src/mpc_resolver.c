@@ -40,8 +40,8 @@ typedef struct {
     void                    *arg;
     int                      mask;
     ares_channel             channel;
-    unsigned                 channel_over:1;
     ares_socket_t            socks[ARES_GETSOCK_MAXNUM];
+    unsigned                 channel_over:1;
 } mpc_resolver_t;
 
 
@@ -102,30 +102,51 @@ void
 mpc_gethostbyname(mpc_event_loop_t *el, mpc_gethostbyname_cb callback, 
     const uint8_t *name, size_t len, uint family, void *arg, const char *server)
 {
-    mpc_resolver_t   *resolver;
-    int               mask, rc;
-    size_t            i;
-    char              buf[MPC_TEMP_BUF_SIZE];
+    mpc_resolver_t       *resolver;
+    int                   mask, rc;
+    size_t                i;
+    char                  buf[MPC_TEMP_BUF_SIZE];
+    struct ares_options   options;
 
     resolver = (mpc_resolver_t *)mpc_calloc(sizeof(mpc_resolver_t), 1);
     if (resolver == NULL) {
         mpc_log_emerg(0, "oom!");
+        /* TODO */
         exit(1);
     }
 
     SET_MAGIC(resolver, MPC_RESOLVER_MAGIC);
 
-    if ((rc = ares_init(&resolver->channel)) != ARES_SUCCESS) {
+    mask = ARES_OPT_FLAGS
+           |ARES_OPT_DOMAINS;
+
+    options.flags = ARES_FLAG_NOCHECKRESP
+                    |ARES_FLAG_NOALIASES
+                    |ARES_FLAG_NOSEARCH;
+
+    options.ndomains = 0;
+    options.domains = NULL;
+    
+    if ((rc = ares_init_options(&resolver->channel, &options, mask))
+        != ARES_SUCCESS)
+    {
         mpc_log_emerg(0, "ares_init failed: (%d: %s)", rc, ares_strerror(rc));
-        mpc_free(resolver);
-        return;
+        //mpc_free(resolver);
+        /* TODO */
+        goto failed;
     }
 
     mpc_memzero(buf, sizeof(buf));
     mpc_memcpy(buf, name, MPC_MIN(len, sizeof(buf)));
 
     if (server) {
-        ares_set_servers_csv(resolver->channel, server);
+        if ((rc = ares_set_servers_csv(resolver->channel, server))
+            != ARES_SUCCESS)
+        {
+            mpc_log_emerg(0, "ares_set_servers_csv failed: (%d: %s)",
+                          rc, ares_strerror(rc));
+            goto failed;
+        }
     }
 
     /*
@@ -137,11 +158,17 @@ mpc_gethostbyname(mpc_event_loop_t *el, mpc_gethostbyname_cb callback,
     resolver->callback = callback;
     resolver->arg = arg;
 
+    /*
     ares_gethostbyname(resolver->channel, buf, family, mpc_resolver_callback, 
                        resolver);
+                       */
+
+    ares_query(resolver->channel, buf, C_IN, T_A, mpc_resolver_callback,
+               resolver);
 
     mask = ares_getsock(resolver->channel, resolver->socks, 
                         ARES_GETSOCK_MAXNUM);
+
     resolver->mask = mask;
 
     for (i = 0; i < ARES_GETSOCK_MAXNUM; ++i) {
