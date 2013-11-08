@@ -97,8 +97,7 @@ mpc_get_time(int64_t *seconds, int64_t *milliseconds)
 
 
 void
-mpc_add_milliseconds_to_now(int64_t milliseconds, 
-    int64_t *sec, int64_t *ms)
+mpc_add_milliseconds_to_now(int64_t milliseconds, int64_t *sec, int64_t *ms)
 {
     int64_t cur_sec, cur_ms, when_sec, when_ms;
 
@@ -118,84 +117,8 @@ mpc_add_milliseconds_to_now(int64_t milliseconds,
 }
 
 
-int 
-mpc_atoi(uint8_t *line, size_t n)
-{
-    int value;
-
-    if (n == 0) {
-        return MPC_ERROR;
-    }
-
-    for (value = 0; n--; line++) {
-        if (*line < '0' || *line > '9') {
-            return MPC_ERROR;
-        }
-
-        value = value * 10 + (*line - '0');
-    }
-
-    if (value < 0) {
-        return MPC_ERROR;
-    }
-
-    return value;
-}
-
-
-int
-mpc_hextoi(uint8_t *line, size_t n)
-{
-    uint8_t     c, ch;
-    int         value;
-
-    if (n == 0) {
-        return MPC_ERROR;
-    }
-
-    for (value = 0; n--; line++) {
-        ch = *line;
-
-        if (ch >= '0' && ch <= '9') {
-            value = value * 16 + (ch - '0');
-            continue;
-        }
-
-        c = (uint8_t) (ch | 0x20);
-
-        if (c >= 'a' && c <= 'f') {
-            value = value * 16 + (c - 'a' + 10);
-            continue;
-        }
-
-        return MPC_ERROR;
-    }
-
-    if (value < 0) {
-        return MPC_ERROR;
-
-    } else {
-        return value;
-    }
-}
-
-
-uint8_t *
-mpc_hex_dump(uint8_t *dst, uint8_t *src, size_t len)
-{
-    static uint8_t  hex[] = "0123456789abcdef";
-
-    while (len--) {
-        *dst++ = hex[*src >> 4];
-        *dst++ = hex[*src++ & 0xf];
-    }
-
-    return dst;
-}
-
-
 uint64_t
-time_ms(void)
+mpc_time_ms(void)
 {
     struct timeval   tv;
     uint64_t         mst;
@@ -208,7 +131,7 @@ time_ms(void)
 
 
 uint64_t
-time_us(void)
+mpc_time_us(void)
 {
     struct timeval  tv;
     uint64_t        ust;

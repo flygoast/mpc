@@ -37,10 +37,12 @@ mpc_net_socket(int domain, int type)
     int s, on = 1;
 
     if ((s = socket(domain, type, 0)) == -1) {
+        mpc_log_err(errno, "socket() failed");
         return MPC_ERROR;
     }
 
     if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == -1) {
+        mpc_log_err(errno, "setsockopt() reuseaddr failed");
         return MPC_ERROR;
     }
 
@@ -52,11 +54,13 @@ static int
 mpc_net_listen(int sockfd, struct sockaddr *sa, socklen_t len)
 {
     if (bind(sockfd, sa, len) == -1) {
+        mpc_log_err(errno, "bind() failed");
         close(sockfd);
         return MPC_ERROR;
     }
 
     if (listen(sockfd, 511) == -1) {
+        mpc_log_err(errno, "listen() failed");
         close(sockfd);
         return MPC_ERROR;
     }
@@ -96,6 +100,19 @@ mpc_net_nonblock(int fd)
     }
 
     if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
+        return MPC_ERROR;
+    }
+
+    return MPC_OK;
+}
+
+
+int
+mpc_net_tcp_keepalive(int fd)
+{
+    int yes = 1;
+    if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &yes, sizeof(yes)) == -1) {
+        mpc_log_err(errno, "setsockopt SO_KEEPALIVE failed, fd: %d", fd);
         return MPC_ERROR;
     }
 
@@ -242,6 +259,11 @@ mpc_net_tcp_connect(char *addr, int port, int flags)
             close(sockfd);
             return MPC_ERROR;
         }
+    }
+
+    if (mpc_net_tcp_keepalive(sockfd) != MPC_OK) {
+        close(sockfd);
+        return MPC_ERROR;
     }
 
     if (connect(sockfd, (struct sockaddr *)&sa, sizeof(sa)) == -1) {

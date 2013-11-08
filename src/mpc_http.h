@@ -41,6 +41,9 @@
 #define MPC_HTTP_MAX_REDIRECT           10
 #define MPC_HTTP_MAX_NFREE              128
 
+#define MPC_HTTP_METHOD_GET             0
+#define MPC_HTTP_METHOD_HEAD            1
+
 
 typedef struct mpc_http_s mpc_http_t;
 typedef struct mpc_http_hdr_s mpc_http_hdr_t;
@@ -61,6 +64,17 @@ typedef struct {
 } mpc_http_header_t;
 
 
+typedef int (*mpc_http_header_handler_pt)(mpc_http_header_t *header, 
+    mpc_http_t *http, void *data);
+
+
+typedef struct {
+    mpc_str_t                     header;
+    mpc_http_header_handler_pt    handler;
+    mpc_http_t                   *data;
+} mpc_http_header_handler_t;
+
+
 typedef struct {
     uint64_t    start;
     uint64_t    connected;
@@ -69,15 +83,12 @@ typedef struct {
 } mpc_http_bench_t;
 
 
-typedef struct {
-
-} mpc_http_stat_t;
-
 struct mpc_http_s {
 #ifdef WITH_DEBUG
     uint32_t                 magic;
 #endif
     TAILQ_ENTRY(mpc_http_s)  next;
+    uint32_t                 id;
     mpc_instance_t          *ins;
     mpc_conn_t              *conn;
     mpc_url_t               *url;
@@ -96,9 +107,13 @@ struct mpc_http_s {
     uint8_t                 *header_end;
     int                      content_length_n;
     int                      content_length_received;
-
+    int                      size;
+    int                      length;
     mpc_http_bench_t         bench;
     unsigned                 need_redirect:1;
+    unsigned                 used:1;
+    unsigned                 chunked:1;
+    unsigned                 discard_chunk:1;
 };
 
 
@@ -111,6 +126,9 @@ mpc_http_t *mpc_http_get();
 void mpc_http_put(mpc_http_t *mpc_http);
 int mpc_http_parse_url(uint8_t *url, size_t n, mpc_url_t *mpc_url);
 int mpc_http_process_request(mpc_http_t *http);
+void mpc_http_create_missing_requests(mpc_instance_t *ins);
+uint32_t mpc_http_get_used(void);
+int mpc_http_get_method(char *method);
 
 
 #endif /* __MPC_HTTP_H_INCLUDED__ */

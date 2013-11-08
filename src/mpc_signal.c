@@ -32,8 +32,14 @@
 
 
 static void mpc_signal_handler(int signo);
-static void mpc_backtrace(int skip_count);
 
+#if 0
+
+#ifdef HAVE_BACKTRACE
+static void mpc_backtrace(int skip_count);
+#endif
+
+#endif
 
 static mpc_signal_t signals[] = {
     { SIGUSR1, "SIGUSR1", 0,                 mpc_signal_handler },
@@ -125,11 +131,15 @@ mpc_signal_handler(int signo)
         done = 1;
         break;
 
+/*
     case SIGSEGV:
+#ifdef HAVE_BACKTRACE
         mpc_backtrace(1);
+#endif
         action_str = ", core dumping";
         raise(SIGSEGV);
         break;
+*/
 
     default:
         break;
@@ -140,10 +150,13 @@ mpc_signal_handler(int signo)
     }
 
     if (done) {
-        exit(1);
+        mpc_stop();
     }
 }
 
+
+#if 0
+#ifdef HAVE_BACKTRACE
 
 static void
 mpc_backtrace(int skip_count)
@@ -161,8 +174,16 @@ mpc_backtrace(int skip_count)
     skip_count++; /* skip the current frame also */
 
     for (i = skip_count, j = 0;  i < size; i++, j++) {
-        /* TODO log */
+        mpc_log_emerg(0, "[%d] %s", j, symbols[j]);
     }
 
     free(symbols);
 }
+
+#else
+
+#define mpc_backtrace /* */
+
+#endif /* HAVE_BACKTRACE */
+
+#endif

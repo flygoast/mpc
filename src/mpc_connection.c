@@ -206,6 +206,8 @@ mpc_conn_send(mpc_conn_t *conn)
                 break;
             }
 
+            mpc_log_err(errno, "write() failed, fd: %d", conn->fd);
+
             return -1;
         }
 

@@ -42,7 +42,7 @@
 
 #define MPC_NOMORE       -1
 
-#define MPC_DEFAULT_EVENT_SIZE  10240
+#define MPC_DEFAULT_EVENT_SIZE  65535
 
 
 typedef struct mpc_event_loop_s mpc_event_loop_t;
@@ -57,7 +57,7 @@ typedef void (*mpc_event_before_sleep_pt)(mpc_event_loop_t *el);
 
 /* file event structure */
 typedef struct {
-    int                mask;    /* one of MPC_(READABLE|WRITABLE) */
+    int                mask;        /* MPC_(READABLE|WRITABLE|NONE) */
     mpc_event_file_pt  r_file_ptr;
     mpc_event_file_pt  w_file_ptr;
     void              *data;
@@ -96,6 +96,7 @@ struct mpc_event_loop_s {
     int                         exit_code;
     void                       *api_data;
     mpc_event_before_sleep_pt   before_sleep_ptr;
+    void                       *resolver;
 };
 
 

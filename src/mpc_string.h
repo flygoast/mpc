@@ -38,6 +38,12 @@ typedef struct  {
 } mpc_str_t;
 
 
+typedef struct {
+    mpc_str_t  key;
+    mpc_str_t  value;
+} mpc_keyval_t;
+
+
 #define mpc_string(str)     { sizeof(str) - 1, (uint8_t *) str }
 #define mpc_null_string     { 0, NULL }
 #define mpc_str_set(str, text)  \

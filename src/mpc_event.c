@@ -138,7 +138,7 @@ mpc_create_file_event(mpc_event_loop_t *el, int fd, int mask,
     mpc_file_event_t  *fe;
 
     if (fd >= el->setsize) {
-        errno = ERANGE;
+        mpc_log_err(0, "too big fd (%d) beyond limit (%d)", fd, el->setsize);
         return MPC_ERROR;
     } 
 
@@ -155,7 +155,7 @@ mpc_create_file_event(mpc_event_loop_t *el, int fd, int mask,
 
     if (mask & MPC_WRITABLE) {
         fe->w_file_ptr = file_ptr;
-    } 
+    }
     fe->data = data;
 
     /* Once one file event has been registered, the el->maxfd
@@ -175,12 +175,19 @@ mpc_delete_file_event(mpc_event_loop_t *el, int fd, int mask)
     mpc_file_event_t *fe;
 
     if (fd >= el->setsize) {
+        mpc_log_warn(0, "too big fd (%d) beyond limit (%d)", fd, el->setsize);
         return;
     }
 
     fe = &el->events[fd];
     if (fe->mask == MPC_NONE) {
         return;
+    };
+
+    if (mask == MPC_READABLE) {
+        fe->r_file_ptr = NULL;
+    } else if (mask == MPC_WRITABLE) {
+        fe->w_file_ptr = NULL;
     }
 
     fe->mask = fe->mask & (~mask);
@@ -392,10 +399,10 @@ process_time_events(mpc_event_loop_t *el)
    fires, or when the next time event occurs (if any).
 
    If flag is 0, the function does nothing and returns.
-   if flag has mpc_ALL_EVENTS set, all the kind of events are processed.
-   if flag has mpc_FILE_EVENTS set, file events are processed.
-   if flag has mpc_TIME_EVENTS set, time events are processed.
-   if flag has mpc_DONT_WAIT set, the function returns ASAP (As soon
+   if flag has MPC_ALL_EVENTS set, all the kind of events are processed.
+   if flag has MPC_FILE_EVENTS set, file events are processed.
+   if flag has MPC_TIME_EVENTS set, time events are processed.
+   if flag has MPC_DONT_WAIT set, the function returns ASAP (As soon
    as possible) until all the events that's possible to process 
    without to wait are processed.
 
@@ -416,9 +423,9 @@ mpc_process_events(mpc_event_loop_t *el, int flags)
     if (el->maxfd != -1
         || ((flags & MPC_TIME_EVENTS) && !(flags & MPC_DONT_WAIT)))
     {
-        int             j;
-        mpc_time_event_t *shortest = NULL;
-        struct timeval    tv, *tvp;
+        int                j;
+        mpc_time_event_t  *shortest = NULL;
+        struct timeval     tv, *tvp;
         
         if (flags & MPC_TIME_EVENTS && !(flags & MPC_DONT_WAIT)) {
             shortest = mpc_search_nearest_timer(el);
@@ -476,11 +483,13 @@ mpc_process_events(mpc_event_loop_t *el, int flags)
                still valid. */
             if (fe->mask & mask & MPC_READABLE) {
                 rfired = 1;
+                mpc_log_debug(0, "process read event, fd: %d", fd);
                 fe->r_file_ptr(el, fd, fe->data, mask);
             } 
 
             if (fe->mask & mask & MPC_WRITABLE) {
                 if (!rfired || fe->w_file_ptr != fe->r_file_ptr) {
+                    mpc_log_debug(0, "process write event, fd: %d", fd);
                     fe->w_file_ptr(el, fd, fe->data, mask);
                 }
             }

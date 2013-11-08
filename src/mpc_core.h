@@ -50,15 +50,25 @@
 #include <sys/resource.h>
 #include <sched.h>
 #include <pthread.h>
+#ifdef __linux__
+#define HAVE_BACKTRACE
+#endif /* __linux__ */
+
+#ifdef HAVE_BACKTRACE
 #include <execinfo.h>
+#endif /* HAVE_BACKTRACE */
+
+#include <locale.h>
 
 
 typedef struct mpc_instance_s mpc_instance_t;
+typedef struct mpc_stat_s mpc_stat_t;
 
 
 #include <mpc_signal.h>
 #include <mpc_queue.h>
 #include <mpc_string.h>
+#include <mpc_rbtree.h>
 #include <mpc_log.h>
 #include <mpc_array.h>
 #include <mpc_alloc.h>
@@ -68,20 +78,26 @@ typedef struct mpc_instance_s mpc_instance_t;
 #include <mpc_url.h>
 #include <mpc_buf.h>
 #include <mpc_connection.h>
+#include <mpc_conf.h>
 #include <mpc_http.h>
+#include <mpc_stat.h>
 
 
-#define MPC_VERSION_NUM         1           /* aabbbccc */
-#define MPC_VERSION_STR         "0.0.1"
+#define MPC_VERSION_NUM         0x00000004           /* aabbbccc */
+#define MPC_VERSION_STR         "0.0.8"
+#define MPC_VERSION_STATUS      "devel"
 #define MPC_VERSION             "mpc/" MPC_VERSION_STR
 
 #define MPC_DEFAULT_CONF_PATH   "conf/mpc.conf"
 #define MPC_DEFAULT_PORT        17748
-#define MPC_DEFAULT_CONCURRENT  50
+#define MPC_DEFAULT_CONCURRENCY 50
+#define MPC_MAX_CONCURRENCY     200000
+#define MPC_MAX_OPENFILES       327680
 
 #define MPC_OK                  0
 #define MPC_ERROR               -1
 #define MPC_AGAIN               -2
+#define MPC_DONE                -4
 
 #define MPC_NOTUSED(V)          ((void)V)
 #define MPC_DO_NOTHING()        /* nothing */
@@ -97,8 +113,15 @@ typedef struct mpc_instance_s mpc_instance_t;
 #define MPC_MIN(a, b)           ((a > b) ? (b) : (a))
 
 #define MPC_TEMP_BUF_SIZE       512
-#define MPC_CONF_BUF_MAX_SIZE   1024
+#define MPC_CONF_BUF_MAX_SIZE   8192
 #define MPC_CRON_INTERVAL       50  /* miliseconds */
+
+
+#define MPC_INVALID_FILE        -1
+#define MPC_FILE_ERROR          -1
+
+
+#define mpc_file_size(sb)       (sb)->st_size
 
 
 #ifdef WITH_DEBUG
@@ -110,9 +133,14 @@ typedef struct mpc_instance_s mpc_instance_t;
 #endif
 
 
+typedef int64_t                 mpc_flag_t;
+
+
 struct mpc_instance_s {
     char                *conf_filename;
     char                *input_filename;
+    char                *result_filename;
+    char                *result_mark;
     char                *addr;
     int                  port;
     int                  log_level;
@@ -120,13 +148,20 @@ struct mpc_instance_s {
     mpc_event_loop_t    *el;
     int                  self_pipe[2];
     mpc_array_t         *urls;
-    int                  cur_concurrent;
-    int                  concurrent;
+    int                  http_method;
+    int                  concurrency;
+    mpc_stat_t          *stat;
+    struct sockaddr_in   dst_addr;
+    mpc_http_hdr_t       http_hdr;
+    uint32_t             http_count;
+    int64_t              run_time;
     unsigned             follow_location:1;
     unsigned             replay:1;
+    unsigned             use_dst_addr:1;
 };
 
 
+void mpc_stop();
 int mpc_core_init(mpc_instance_t *ins);
 int mpc_core_run(mpc_instance_t *ins);
 int mpc_core_deinit(mpc_instance_t *ins);

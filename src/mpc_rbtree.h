@@ -49,13 +49,20 @@ struct mpc_rbnode_s {
     int64_t         key;        /* key for ordering */
     void           *data;       /* opaque data */
     uint8_t         color;      /* red | black */
-}
+};
 
 
 typedef struct {
     mpc_rbnode_t    *root;      /* root node */
     mpc_rbnode_t    *sentinel;  /* nil node */
 } mpc_rbtree_t;
+
+
+void mpc_rbnode_init(mpc_rbnode_t *node);
+void mpc_rbtree_init(mpc_rbtree_t *tree, mpc_rbnode_t *root);
+mpc_rbnode_t *mpc_rbtree_min(mpc_rbtree_t *tree);
+void mpc_rbtree_insert(mpc_rbtree_t *tree, mpc_rbnode_t *node);
+void mpc_rbtree_delete(mpc_rbtree_t *tree, mpc_rbnode_t *node);
 
 
 #endif /* __MPC_RBTREE_H_INCLUDED__ */

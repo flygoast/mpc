@@ -36,33 +36,44 @@ static int   show_help;
 static int   show_version;
 static int   test_conf;
 static int   daemonize;
+static mpc_instance_t   *mpc_ins;
+
+
+static void mpc_rlimit_reset();
 
 
 static struct option long_options[] = {
-    { "help",       no_argument,        NULL,   'h' },
-    { "version",    no_argument,        NULL,   'v' },
-    { "test",       no_argument,        NULL,   't' },
-    { "daemon",     no_argument,        NULL,   'd' },
-    { "follow",     no_argument,        NULL,   'F' },
-    { "replay",     no_argument,        NULL,   'r' },
-    { "log",        required_argument,  NULL,   'l' },
-    { "level",      required_argument,  NULL,   'L' },
-    { "conf",       required_argument,  NULL,   'c' },
-    { "file",       required_argument,  NULL,   'f' },
-    { "addr",       required_argument,  NULL,   'a' },
-    { "port",       required_argument,  NULL,   'p' },
-    { "concurrent", required_argument,  NULL,   'C' },
-    { NULL,         0,                  NULL,    0  }
+    { "help",        no_argument,        NULL,   'h' },
+    { "version",     no_argument,        NULL,   'v' },
+    { "test",        no_argument,        NULL,   'T' },
+    { "daemon",      no_argument,        NULL,   'd' },
+    { "follow",      no_argument,        NULL,   'F' },
+    { "replay",      no_argument,        NULL,   'r' },
+    { "log",         required_argument,  NULL,   'l' },
+    { "level",       required_argument,  NULL,   'L' },
+    { "conf",        required_argument,  NULL,   'C' },
+    { "file",        required_argument,  NULL,   'f' },
+    { "addr",        required_argument,  NULL,   'a' },
+    { "port",        required_argument,  NULL,   'p' },
+    { "dst-addr",    required_argument,  NULL,   'A' },
+    { "concurrency", required_argument,  NULL,   'c' },
+    { "method",      required_argument,  NULL,   'm' },
+    { "show-result", required_argument,  NULL,   's' },
+    { "mark",        required_argument,  NULL,   'M' },
+    { "time",        required_argument,  NULL,   't' },
+    { NULL,          0,                  NULL,    0  }
 };
 
 
-static char *short_options = "hvtdFrl:L:c:f:a:p:C:";
+static char *short_options = "hvTdFrl:L:C:f:a:p:A:c:m:s:M:t:";
 
 
 static int
 mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
 {
-    int c;
+    int              c;
+    struct hostent  *he;
+    mpc_str_t        t;
 
     opterr = 0;
 
@@ -79,7 +90,7 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
             show_version = 1;
             break;
 
-        case 't':
+        case 'T':
             test_conf = 1;
             break;
 
@@ -95,7 +106,7 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
             ins->replay = 1;
             break;
 
-        case 'c':
+        case 'C':
             ins->conf_filename = optarg;
             break;
 
@@ -104,6 +115,10 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
             break;
 
         case 'l':
+            if (ins->log_file) {
+                mpc_log_stderr(0, "duplicate option '-l'");
+                return MPC_ERROR;
+            }
             ins->log_file = optarg;
             break;
 
@@ -133,16 +148,61 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
             }
             break;
 
-        case 'C':
-            ins->concurrent = mpc_atoi((uint8_t *)optarg, strlen(optarg));
-            if (ins->concurrent == MPC_ERROR) {
-                mpc_log_stderr(0, "option '-C' requires a number");
+        case 'A':
+            if (inet_aton(optarg, &ins->dst_addr.sin_addr) == 0) {
+                if ((he = gethostbyname(optarg)) == NULL) {
+                    mpc_log_stderr(0, "option '-A' host \"%s\" not found",
+                                   optarg);
+                    return MPC_ERROR;
+                }
+                mpc_memcpy(&ins->dst_addr.sin_addr, he->h_addr, 
+                           sizeof(struct in_addr));
+            }
+            ins->use_dst_addr = 1;
+            break;
+
+        case 'c':
+            ins->concurrency = mpc_atoi((uint8_t *)optarg, strlen(optarg));
+            if (ins->concurrency == MPC_ERROR) {
+                mpc_log_stderr(0, "option '-c' requires a number");
                 return MPC_ERROR;
             }
 
-            if (ins->concurrent < 1) {
-                mpc_log_stderr(0, "option '-C' value must be positive",
-                               ins->concurrent); 
+            if (ins->concurrency < 1 
+                || ins->concurrency > MPC_MAX_CONCURRENCY)
+            {
+                mpc_log_stderr(0, "option '-c' value must be between 1 and %ud",
+                               MPC_MAX_CONCURRENCY); 
+                return MPC_ERROR;
+            }
+            break;
+
+        case 'm':
+            ins->http_method = mpc_http_get_method(optarg);
+            if (ins->http_method == MPC_ERROR) {
+                mpc_log_stderr(0, 
+                          "option '-m' requires a valid http method: GET|HEAD");
+                return MPC_ERROR;
+            }
+            break;
+
+        case 's':
+            ins->result_filename = optarg;
+            break;
+
+        case 'M':
+            ins->result_mark = optarg;
+            break;
+
+        case 't':
+            t.data = (uint8_t *) optarg;
+            t.len = mpc_strlen(optarg);
+
+            ins->run_time = mpc_parse_time(&t, 1);
+            if (ins->run_time == MPC_ERROR) {
+                mpc_log_stderr(0, 
+                          "option '-t' requires a valid time expression" CRLF
+                          "such as: 2d2h2m2s");
                 return MPC_ERROR;
             }
             break;
@@ -150,13 +210,17 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
         case '?':
             switch (optopt) {
             case 'f':
-            case 'c':
+            case 'C':
             case 'l':
                 mpc_log_stderr(0, "option -%c requires a file name", optopt);
                 break;
 
+            case 'A':
             case 'a':
             case 'L':
+            case 'm':
+            case 'M':
+            case 's':
                 mpc_log_stderr(0, "option -%c requires a string", optopt);
                 break;
 
@@ -178,9 +242,31 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
 
 
 static void
-mpc_show_usage()
+mpc_show_usage(void)
 {
-
+    printf("Usage: mpc [-?hvTdFr] [-l log file] [-L log level] " CRLF
+           "           [-c concurrency] [-f url file] [-m http method]" CRLF
+           "           [-s result file] [-M result mark string] " CRLF
+           "           [-A specified address] [-t run time]" CRLF
+           CRLF
+           "Options:" CRLF
+           "  -h, --help            : this help" CRLF
+           "  -v, --version         : show version and exit" CRLF
+           "  -T, --test-conf       : test configuration syntax and exit" CRLF
+           "  -f, --file            : url files" CRLF
+           "  -A, --dst-addr=S      : use specified address by this" CRLF
+           "  -F, --follow          : follow 302 redirect" CRLF
+           "  -r, --replay          : replay a url file" CRLF
+           "  -l, --log=S           : log file" CRLF
+           "  -L, --level=S         : log level" CRLF
+           "  -c, --concurrency=N   : concurrency" CRLF
+           "  -m, --method=S        : http method GET, HEAD" CRLF
+           "  -s, --show-result=S   : show result in a file" CRLF
+           "  -M, --mark=S          : result file mark string" CRLF
+           "  -t, --time=Nm         : timed testing where \"m\" is modifer" CRLF
+           "                          S(second), M(minute), H(hour), D(day)"
+           CRLF
+           CRLF);
 }
 
 
@@ -196,14 +282,21 @@ mpc_set_default_option(mpc_instance_t *ins)
 {
     ins->conf_filename = MPC_DEFAULT_CONF_PATH;
     ins->input_filename = NULL;
+    ins->result_filename = NULL;
+    ins->result_mark = NULL;
     ins->addr = NULL;
     ins->port = MPC_DEFAULT_PORT;
     ins->urls = NULL;
-    ins->cur_concurrent = 0;
-    ins->concurrent = MPC_DEFAULT_CONCURRENT;
+    ins->concurrency = MPC_DEFAULT_CONCURRENCY;
+    ins->run_time = 0;
+
+    ins->http_count = 0;
+    TAILQ_INIT(&ins->http_hdr);
 
     ins->follow_location = 0;
     ins->replay = 0;
+    ins->use_dst_addr = 0;
+    ins->http_method = MPC_HTTP_METHOD_GET;
     ins->log_level = MPC_LOG_INFO;
     ins->log_file = NULL;
 
@@ -216,30 +309,35 @@ mpc_set_default_option(mpc_instance_t *ins)
 int 
 main(int argc, char **argv)
 {
-    int              rc;
-    mpc_instance_t  *ins;
+    int    fd;
+    int    rc;
 
-    ins = (mpc_instance_t *)mpc_calloc(sizeof(mpc_instance_t), 1);
-    if (ins == NULL) {
+    mpc_ins = (mpc_instance_t *)mpc_calloc(sizeof(mpc_instance_t), 1);
+    if (mpc_ins == NULL) {
         mpc_log_stderr(errno, "oom!");
         exit(1);
     }
     
-    mpc_set_default_option(ins);
+    mpc_set_default_option(mpc_ins);
 
-    rc = mpc_get_options(argc, argv, ins);
+    mpc_ins->stat = mpc_stat_create();
+    if (mpc_ins->stat == NULL) {
+        mpc_log_stderr(errno, "oom!");
+        exit(1);
+    }
+
+    rc = mpc_get_options(argc, argv, mpc_ins);
     if (rc != MPC_OK) {
         mpc_show_usage();
         exit(1);
     }
 
     if (show_version) {
-        mpc_log_stderr(0, "mpc: Multiple Protocol Client" CRLF
-                          "Version: %s" CRLF
-                          "Copyright (c) 2013, "
-                          "FengGu, <flygoast@gmail.com>" CRLF
-                          "Repo: https://github.com/flygoast/mpc",
-                          MPC_VERSION_STR);
+        printf("mpc: Multiple Protocol Client" CRLF
+               "Version: %s-%s" CRLF
+               "Compiled at %s %s" CRLF
+               CRLF,
+               MPC_VERSION_STR, MPC_VERSION_STATUS, __DATE__, __TIME__);
 
         if (show_help) {
             mpc_show_usage();
@@ -255,17 +353,58 @@ main(int argc, char **argv)
         exit(0);
     }
 
-    if (mpc_core_init(ins) != MPC_OK) {
+    mpc_rlimit_reset();
+
+    if (mpc_core_init(mpc_ins) != MPC_OK) {
         exit(1);
     }
 
-    if (mpc_core_run(ins) != MPC_OK) {
+    if (mpc_core_run(mpc_ins) != MPC_OK) {
         exit(1);
     }
 
-    if (mpc_core_deinit(ins) != MPC_OK) {
+    if (mpc_core_deinit(mpc_ins) != MPC_OK) {
         exit(1);
     }
+
+    mpc_stat_print(mpc_ins->stat);
+
+    if (mpc_ins->result_filename) {
+        fd = mpc_stat_result_create(mpc_ins->result_filename);
+        if (fd != MPC_ERROR) {
+            mpc_stat_result_record(fd, mpc_ins->stat, mpc_ins->result_mark);
+            mpc_stat_result_close(fd);
+        }
+    }
+
+    mpc_stat_destroy(mpc_ins->stat);
+
+    mpc_free(mpc_ins);
 
     exit(0);
+}
+
+
+void
+mpc_stop()
+{
+    mpc_ins->stat->stop = mpc_time_ms();
+    mpc_event_stop(mpc_ins->el, 0);
+}
+
+
+static void
+mpc_rlimit_reset()
+{
+    struct rlimit rlim;
+
+    /* Raise open files */
+    rlim.rlim_cur = MPC_MAX_OPENFILES;
+    rlim.rlim_max = MPC_MAX_OPENFILES;
+    setrlimit(RLIMIT_NOFILE, &rlim);
+
+    /* Alow core dump */
+    rlim.rlim_cur = 1 << 29;
+    rlim.rlim_max = 1 << 29;
+    setrlimit(RLIMIT_CORE, &rlim);
 }

@@ -32,23 +32,98 @@
 
 
 typedef struct {
-#ifdef WITH_DEBUG
-    int                      magic;
-#endif
-    mpc_event_loop_t        *el;
-    mpc_gethostbyname_cb     callback;
-    void                    *arg;
-    int                      mask;
-    ares_channel             channel;
-    unsigned                 channel_over:1;
-    ares_socket_t            socks[ARES_GETSOCK_MAXNUM];
+    mpc_event_loop_t  *el;
+    ares_channel       channel;
+    int                mask;
+    ares_socket_t      socks[ARES_GETSOCK_MAXNUM];
+    unsigned           channel_over:1;
 } mpc_resolver_t;
+
+
+typedef struct {
+#ifdef WITH_DEBUG
+    int                    magic;
+#endif
+    mpc_gethostbyname_cb   callback;
+    void                  *arg;
+    mpc_event_loop_t      *el;
+} mpc_resolver_ctx_t;
+
+
+int
+mpc_resolver_init(mpc_event_loop_t *el, const char *server)
+{
+    int                   rc, mask;
+    mpc_resolver_t       *resolver;
+    struct ares_options   options;
+
+    rc = ares_library_init(ARES_LIB_INIT_ALL);
+
+    if (rc != ARES_SUCCESS) {
+        mpc_log_err(0, "initialize resolver failed: (%d: %s)",
+                    ares_strerror(rc));
+
+        return MPC_ERROR;
+    }
+
+    resolver = mpc_calloc(1, sizeof(mpc_resolver_t));
+    if (resolver == NULL) {
+        mpc_log_emerg(0, "allocate memory failed");
+        return MPC_ERROR;
+    }
+
+    mask = ARES_OPT_FLAGS
+           |ARES_OPT_DOMAINS;
+
+    options.flags = ARES_FLAG_NOCHECKRESP
+                    |ARES_FLAG_NOALIASES
+                    |ARES_FLAG_NOSEARCH;
+
+    options.ndomains = 0;
+    options.domains = NULL;
+    
+    if ((rc = ares_init_options(&resolver->channel, &options, mask))
+        != ARES_SUCCESS)
+    {
+        mpc_log_emerg(0, "ares_init failed: (%d: %s)", rc, ares_strerror(rc));
+        goto failed;
+    }
+
+    if (server) {
+        if ((rc = ares_set_servers_csv(resolver->channel, server))
+            != ARES_SUCCESS)
+        {
+            mpc_log_emerg(0, "ares_set_servers_csv failed: (%d: %s)",
+                          rc, ares_strerror(rc));
+            goto failed;
+        }
+    }
+
+    resolver->el = el;
+    el->resolver = resolver;
+
+    return MPC_OK;
+
+failed:
+
+    mpc_free(resolver);
+    return MPC_ERROR;
+}
+
+
+/*
+void 
+mpc_resolver_cleanup()
+{
+    ares_library_cleanup();
+}
+*/
 
 
 static void
 mpc_resolver_callback(void *arg, int status, int timeouts, struct hostent *host)
 {
-    mpc_resolver_t  *resolver = (mpc_resolver_t *)arg;
+    mpc_resolver_ctx_t  *ctx = (mpc_resolver_ctx_t *)arg;
 
     if (status == ARES_EDESTRUCTION) {
         /* do nothing here */
@@ -56,12 +131,10 @@ mpc_resolver_callback(void *arg, int status, int timeouts, struct hostent *host)
     }
 
     if (status != ARES_SUCCESS) {
-        resolver->callback(resolver->el, status, NULL, resolver->arg);
+        ctx->callback(ctx->el, status, NULL, ctx->arg);
     } else {
-        resolver->callback(resolver->el, MPC_RESOLVER_OK, host, resolver->arg);
+        ctx->callback(ctx->el, MPC_RESOLVER_OK, host, ctx->arg);
     }
-
-    resolver->channel_over = 1;
 }
 
 
@@ -98,53 +171,55 @@ mpc_resolver_process(mpc_event_loop_t *el, int fd, void *arg, int mask)
 }
 
 
-void
-mpc_gethostbyname(mpc_event_loop_t *el, mpc_gethostbyname_cb callback, 
-    const uint8_t *name, size_t len, uint family, void *arg, const char *server)
+mpc_resolver_ctx_t *
+mpc_resolver_get()
 {
-    mpc_resolver_t   *resolver;
-    int               mask, rc;
-    size_t            i;
-    char              buf[MPC_TEMP_BUF_SIZE];
+    return calloc(sizeof(mpc_resolver_ctx_t), 1);
+}
 
-    resolver = (mpc_resolver_t *)mpc_calloc(sizeof(mpc_resolver_t), 1);
-    if (resolver == NULL) {
-        mpc_log_emerg(0, "oom!");
-        exit(1);
-    }
 
-    SET_MAGIC(resolver, MPC_RESOLVER_MAGIC);
+void
+mpc_resolver_put(mpc_resolver_ctx_t *ctx)
+{
+    free(ctx);
+}
 
-    if ((rc = ares_init(&resolver->channel)) != ARES_SUCCESS) {
-        mpc_log_emerg(0, "ares_init failed: (%d: %s)", rc, ares_strerror(rc));
-        mpc_free(resolver);
-        return;
+
+int
+mpc_gethostbyname(mpc_event_loop_t *el, const uint8_t *name, size_t len,
+    mpc_gethostbyname_cb callback, void *arg)
+{
+    mpc_resolver_t       *resolver;
+    int                   mask;
+    size_t                i;
+    char                  buf[MPC_TEMP_BUF_SIZE];
+    mpc_resolver_ctx_t   *ctx;
+
+    resolver = el->resolver;
+    assert(resolver);
+
+    ctx = mpc_resolver_get();
+    if (ctx == NULL) {
+        mpc_log_emerg(0, "get resolver context failed");
+        return MPC_ERROR;
     }
 
     mpc_memzero(buf, sizeof(buf));
     mpc_memcpy(buf, name, MPC_MIN(len, sizeof(buf)));
 
-    if (server) {
-        ares_set_servers_csv(resolver->channel, server);
-    }
+    ctx->callback = callback;
+    ctx->arg = arg;
+    ctx->el = el;
 
-    /*
-     * set by mpc_calloc():
-     *   resolver->channel_over = 0;
-     */
-
-    resolver->el = el;
-    resolver->callback = callback;
-    resolver->arg = arg;
-
-    ares_gethostbyname(resolver->channel, buf, family, mpc_resolver_callback, 
-                       resolver);
+    ares_gethostbyname(resolver->channel, buf, AF_INET, mpc_resolver_callback,
+                       ctx);
 
     mask = ares_getsock(resolver->channel, resolver->socks, 
                         ARES_GETSOCK_MAXNUM);
+
     resolver->mask = mask;
 
-    for (i = 0; i < ARES_GETSOCK_MAXNUM; ++i) {
+    for (i = 0; i < ARES_GETSOCK_MAXNUM; i++) {
         if (ARES_GETSOCK_READABLE(mask, i)) {
             mpc_create_file_event(el, resolver->socks[i], MPC_READABLE, 
                                   (mpc_event_file_pt)mpc_resolver_process,
@@ -157,6 +232,8 @@ mpc_gethostbyname(mpc_event_loop_t *el, mpc_gethostbyname_cb callback,
                                   (void *)resolver);
         }
     }
+
+    return MPC_OK;
 }
 
 
