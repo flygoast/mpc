@@ -473,6 +473,14 @@ mpc_http_process_request(mpc_http_t *mpc_http)
 
     ASSERT(mpc_url != NULL);
 
+    printf("===== %.*s\n", (int)mpc_url->host.len, mpc_url->host.data);
+
+    mpc_gethostbyname(ins->el, mpc_url->host.data, mpc_url->host.len,
+                      mpc_http_gethostbyname_cb, (void *)mpc_http);
+
+    return MPC_OK;
+
+    /*
     if (ins->use_dst_addr) {
         if (mpc_http_create_request((char *)&ins->dst_addr.sin_addr, mpc_http)
             != MPC_OK)
@@ -501,6 +509,7 @@ mpc_http_process_request(mpc_http_t *mpc_http)
         exit(1);
 #endif 
     }
+    */
 
     return MPC_OK;
 }
@@ -514,22 +523,37 @@ mpc_http_gethostbyname_cb(mpc_event_loop_t *el, int status,
     mpc_http_t  *mpc_http = (mpc_http_t *)arg;
     mpc_url_t   *mpc_url = mpc_http->url;
 
+    static int count = 0;
+    count++;
+
     if (status == MPC_RESOLVER_OK) {
 #ifdef WITH_DEBUG
+
         uint32_t addr = *(in_addr_t *)host->h_addr;
         mpc_log_debug(0, "gethostbyname url(%d) \"%V\" %ud.%ud.%ud.%ud", 
                       mpc_url->url_id, &mpc_url->host,
                       addr & 0xff, (addr & 0xff00) >> 8,
                       (addr & 0xff0000) >> 16, (addr & 0xff000000) >> 24);
+
+        printf("%d gethostbyname url(%d) \"%.*s\" %u.%u.%u.%u\n", 
+               count, mpc_url->url_id, mpc_url->host.len, mpc_url->host.data,
+               addr & 0xff, (addr & 0xff00) >> 8,
+               (addr & 0xff0000) >> 16, (addr & 0xff000000) >> 24);
+
 #endif
 
+        /*
         if (mpc_http_create_request(host->h_addr, mpc_http) != MPC_OK) {
             mpc_log_err(0, "create http request \"http://%V%V\" failed",
                         &mpc_url->host, &mpc_url->uri);
         }
+        */
     } else {
+        printf("gethostbyname failed: (%d: %s)\n", 
+               status, mpc_resolver_strerror(status));
+
         mpc_log_err(0, "gethostbyname failed: (%d: %s)", 
-                    status, ares_strerror(status));
+                    status, mpc_resolver_strerror(status));
         if (mpc_url->no_put == 0) {
             mpc_url_put(mpc_url);
         }

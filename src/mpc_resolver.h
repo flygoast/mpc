@@ -34,7 +34,8 @@
 #include <ares.h>
 
 
-#define MPC_RESOLVER_OK      ARES_SUCCESS
+#define MPC_RESOLVER_OK         ARES_SUCCESS
+#define mpc_resolver_strerror   ares_strerror
 
 
 typedef void (*mpc_gethostbyname_cb)(mpc_event_loop_t *el, int status,

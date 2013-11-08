@@ -86,6 +86,13 @@ mpc_core_init(mpc_instance_t *ins)
         return MPC_ERROR;
     }
 
+#ifdef WITH_MPC_RESOLVER
+    if (mpc_resolver_init(ins->el, NULL) != MPC_OK) {
+        mpc_log_emerg(0, "initialize resolver failed");
+        return MPC_ERROR;
+    }
+#endif
+
     srandom(time(NULL));
 
     return MPC_OK;
@@ -146,7 +153,7 @@ mpc_core_run(mpc_instance_t *ins)
 
     if (mpc_create_time_event(ins->el, MPC_CRON_INTERVAL, 
                               mpc_core_process_cron, (void *)ins, NULL) 
-        != MPC_OK)
+        == MPC_ERROR)
     {
         mpc_log_stderr(0, "create time event failed");
         return MPC_ERROR;

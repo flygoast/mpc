@@ -362,3 +362,46 @@ mpc_rbtree_delete(mpc_rbtree_t *tree, mpc_rbnode_t *node)
 
     mpc_rbtree_black(temp);
 }
+    
+
+mpc_rbnode_t *
+mpc_rbtree_find(mpc_rbtree_t *tree, int64_t key)
+{
+    mpc_rbnode_t  *root = tree->root;
+    mpc_rbnode_t  *sentinel = tree->sentinel;
+    mpc_rbnode_t  *temp;
+
+    /* empty tree */
+    if (root == sentinel) {
+        return NULL;
+    }
+
+    temp = root;
+
+    for ( ;; ) {
+        if (key == temp->key) {
+            return temp;
+        }
+
+        temp = (key < temp->key) ? temp->left : temp->right;
+        if (temp == sentinel) {
+            break;
+        }
+    }
+
+    return NULL;
+}
+
+
+mpc_rbnode_t *
+mpc_rbnode_get(void)
+{
+    return calloc(sizeof(mpc_rbnode_t), 1);
+}
+
+
+void
+mpc_rbnode_put(mpc_rbnode_t *node)
+{
+    free(node);
+}
