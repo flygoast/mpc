@@ -45,9 +45,10 @@ typedef void (*mpc_gethostbyname_cb)(mpc_event_loop_t *el, int status,
  * using /etc/resolv.conf. The string format is CSV. You can NOT
  * add whitespace between two servers.
  */
-void mpc_gethostbyname(mpc_event_loop_t *el, mpc_gethostbyname_cb callback, 
-    const uint8_t *name, size_t len, uint family, void *arg, 
-    const char *server);
+int mpc_resolver_init(mpc_event_loop_t *el, const char *server);
+
+int mpc_gethostbyname(mpc_event_loop_t *el, const uint8_t *name, size_t len,
+    mpc_gethostbyname_cb callback, void *arg);
 
 
 #endif /* __MPC_RESOLVER_H_INCLUDED__ */

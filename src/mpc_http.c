@@ -493,9 +493,8 @@ mpc_http_process_request(mpc_http_t *mpc_http)
 
     } else {
 #ifdef WITH_MPC_RESOLVER
-        mpc_gethostbyname(ins->el, mpc_http_gethostbyname_cb, 
-                          mpc_url->host.data, mpc_url->host.len,
-                          AF_INET, (void *)mpc_http, NULL);
+        mpc_gethostbyname(ins->el, mpc_url->host.data, mpc_url->host.len,
+                          mpc_http_gethostbyname_cb, (void *)mpc_http);
 #else
         mpc_log_emerg(0, "mpc not compiled with resolver." CRLF
                          "Please recompile it with -DWITH_MPC_RESOLVER");

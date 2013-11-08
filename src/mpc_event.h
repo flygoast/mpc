@@ -96,6 +96,7 @@ struct mpc_event_loop_s {
     int                         exit_code;
     void                       *api_data;
     mpc_event_before_sleep_pt   before_sleep_ptr;
+    void                       *resolver;
 };
 
 
