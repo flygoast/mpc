@@ -131,6 +131,7 @@ mpc_core_deinit(mpc_instance_t *ins)
 int
 mpc_core_run(mpc_instance_t *ins)
 {
+    int64_t  timer_id;
 
     /*
     int  listen_fd;
@@ -151,10 +152,9 @@ mpc_core_run(mpc_instance_t *ins)
 
     */
 
-    if (mpc_create_time_event(ins->el, MPC_CRON_INTERVAL, 
-                              mpc_core_process_cron, (void *)ins, NULL) 
-        == MPC_ERROR)
-    {
+    timer_id = mpc_create_time_event(ins->el, MPC_CRON_INTERVAL, 
+                                     mpc_core_process_cron, (void *)ins, NULL);
+    if (timer_id == MPC_ERROR) {
         mpc_log_stderr(0, "create time event failed");
         return MPC_ERROR;
     }
@@ -270,7 +270,7 @@ mpc_core_process_notify(mpc_event_loop_t *el, int fd, void *data, int mask)
                                  "host: \"%V\" uri: \"%V\"",
                               mpc_url->url_id, &mpc_url->host, &mpc_url->uri);
     
-                mpc_http_process_request(mpc_http);
+                mpc_http_process_request(ins, mpc_url, mpc_http);
             }
 
             count = __sync_fetch_and_add(&mpc_task_total, 0);

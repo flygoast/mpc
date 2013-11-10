@@ -466,14 +466,22 @@ mpc_http_parse_url(uint8_t *url, size_t n, mpc_url_t *mpc_url)
 
 
 int
-mpc_http_process_request(mpc_http_t *mpc_http)
+mpc_http_process_request(mpc_instance_t *ins, mpc_url_t *mpc_url,
+    mpc_http_t *mpc_http)
 {
-    mpc_url_t       *mpc_url = mpc_http->url;
-    mpc_instance_t  *ins = mpc_http->ins;
-
-    ASSERT(mpc_url != NULL);
-
     printf("===== %.*s\n", (int)mpc_url->host.len, mpc_url->host.data);
+
+    if (mpc_http == NULL) {
+        mpc_http = mpc_http_get();
+
+        if (mpc_http == NULL) {
+            mpc_log_emerg(0, "oom when get http");
+            return MPC_ERROR;
+        }
+    
+        mpc_http->ins = ins;
+        mpc_http->url = mpc_url;
+    }
 
     mpc_gethostbyname(ins->el, mpc_url->host.data, mpc_url->host.len,
                       mpc_http_gethostbyname_cb, (void *)mpc_http);
@@ -489,6 +497,18 @@ mpc_http_process_request(mpc_http_t *mpc_http)
         }
 
         return MPC_OK;
+    }
+
+    if (mpc_http == NULL) {
+        mpc_http = mpc_http_get();
+
+        if (mpc_http == NULL) {
+            mpc_log_emerg(0, "oom when get http");
+            return MPC_ERROR;
+        }
+    
+        mpc_http->ins = ins;
+        mpc_http->url = mpc_url;
     }
 
     if (mpc_url->no_resolve) {
@@ -558,6 +578,8 @@ mpc_http_gethostbyname_cb(mpc_event_loop_t *el, int status,
             mpc_url_put(mpc_url);
         }
     }
+
+    mpc_http_put(mpc_http);
 }
 #endif
 
@@ -913,7 +935,8 @@ parse_body:
 
                 /* a whole response has been parsed successfully */
 
-                mpc_log_debug(0, "*%ud, parse a whole chunked response", http->id);
+                mpc_log_debug(0, "*%ud, parse a whole chunked response",
+                              http->id);
                 goto done;
             }
 
@@ -1000,8 +1023,9 @@ done:
         mpc_log_debug(0, "*%ud, redirect to \"http://%V%V\", %p", 
                       http->id, &temp_url->host, &temp_url->uri, http);
         mpc_http_reset_bulk(http);
-        if (mpc_http_process_request(http) != MPC_OK) {
-            mpc_log_err(0, "*%ud, process url \"http://%V%V\" failed, ignored, %p",
+        if (mpc_http_process_request(http->ins, http->url, http) != MPC_OK) {
+            mpc_log_err(0,
+                        "*%ud, process url \"http://%V%V\" failed, ignored, %p",
                         http->id, &mpc_url->host, &mpc_url->uri, http);
         }
 
@@ -1902,7 +1926,7 @@ mpc_http_create_missing_requests(mpc_instance_t *ins)
 
     concurrency = mpc_http_get_used();
     
-    if (concurrency >= (uint32_t)(ins->concurrency * 1.0)) {
+    if (concurrency >= (uint32_t) (ins->concurrency * 1.0)) {
         return;
     }
 
@@ -1915,8 +1939,11 @@ mpc_http_create_missing_requests(mpc_instance_t *ins)
     
         mpc_url_p = mpc_array_get(ins->urls, idx);
         ASSERT(mpc_url_p != NULL);
+
         mpc_url = *mpc_url_p;
+        ASSERT(mpc_url->no_put);
     
+        /*
         mpc_http = mpc_http_get();
 
         if (mpc_http == NULL) {
@@ -1927,7 +1954,9 @@ mpc_http_create_missing_requests(mpc_instance_t *ins)
         mpc_http->ins = ins;
         mpc_http->url = mpc_url;
     
-        mpc_http_process_request(mpc_http);
+        */
+
+        mpc_http_process_request(ins, mpc_url, NULL);
     }
 }
 

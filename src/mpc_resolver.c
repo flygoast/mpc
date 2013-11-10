@@ -36,8 +36,6 @@ typedef struct {
     mpc_event_loop_t  *el;
     ares_channel       channel;
     int64_t            timer_id;
-    int                sock_cnt;
-    ares_socket_t      socks[ARES_GETSOCK_MAXNUM];
     mpc_rbnode_t       root;
     mpc_rbtree_t       rbtree;
 } mpc_resolver_t;
@@ -112,7 +110,6 @@ mpc_resolver_init(mpc_event_loop_t *el, const char *server)
         }
     }
 
-    /*
     resolver->timer_id = mpc_create_time_event(el, MPC_RESOLVER_INTERVAL, 
                                                mpc_resolver_process_timeout,
                                                (void *)resolver, NULL);
@@ -120,7 +117,6 @@ mpc_resolver_init(mpc_event_loop_t *el, const char *server)
         mpc_log_stderr(0, "create resolver time event failed");
         goto failed;
     }
-    */
 
     resolver->el = el;
     el->resolver = resolver;
@@ -280,8 +276,6 @@ mpc_gethostbyname(mpc_event_loop_t *el, const uint8_t *name, size_t len,
             /* assume no further sockets are returned */
             break;
         }
-
-        resolver->sock_cnt++;
     }
 
     return MPC_OK;
@@ -327,6 +321,7 @@ mpc_resolver_process_sockstate(void *data, ares_socket_t sock,
         printf("DELETE %s\n", __func__);
 
         node = mpc_rbtree_find(&resolver->rbtree, (int64_t) sock);
+        mpc_delete_file_event(resolver->el, sock, MPC_READABLE|MPC_WRITABLE);
         ASSERT(node);
         mpc_rbtree_delete(&resolver->rbtree, node);
         mpc_rbnode_put(node);
