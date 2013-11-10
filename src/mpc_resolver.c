@@ -73,6 +73,7 @@ mpc_resolver_init(mpc_event_loop_t *el, const char *server)
         return MPC_ERROR;
     }
 
+    /* TODO free*/
     resolver = mpc_calloc(1, sizeof(mpc_resolver_t));
     if (resolver == NULL) {
         mpc_log_emerg(0, "allocate memory failed");
@@ -83,11 +84,13 @@ mpc_resolver_init(mpc_event_loop_t *el, const char *server)
 
     mask = ARES_OPT_FLAGS
            |ARES_OPT_DOMAINS
+           |ARES_OPT_LOOKUPS
            |ARES_OPT_SOCK_STATE_CB;
 
     options.flags = ARES_FLAG_NOCHECKRESP
                     |ARES_FLAG_NOALIASES
                     |ARES_FLAG_NOSEARCH;
+    options.lookups = "b"; /* only DNS lookup */
     options.ndomains = 0;
     options.domains = NULL;
     options.sock_state_cb = mpc_resolver_process_sockstate;
@@ -110,14 +113,7 @@ mpc_resolver_init(mpc_event_loop_t *el, const char *server)
         }
     }
 
-    resolver->timer_id = mpc_create_time_event(el, MPC_RESOLVER_INTERVAL, 
-                                               mpc_resolver_process_timeout,
-                                               (void *)resolver, NULL);
-    if (resolver->timer_id == MPC_ERROR) {
-        mpc_log_stderr(0, "create resolver time event failed");
-        goto failed;
-    }
-
+    resolver->timer_id = -1;
     resolver->el = el;
     el->resolver = resolver;
 
@@ -189,12 +185,8 @@ mpc_gethostbyname(mpc_event_loop_t *el, const uint8_t *name, size_t len,
     mpc_gethostbyname_cb callback, void *arg)
 {
     mpc_resolver_t       *resolver;
-    int                   mask, anyevent, sock;
-    ares_socket_t         socks[ARES_GETSOCK_MAXNUM];
-    size_t                i;
     char                  buf[MPC_TEMP_BUF_SIZE];
     mpc_resolver_ctx_t   *ctx;
-    mpc_rbnode_t         *node;
 
     resolver = el->resolver;
     ASSERT(resolver);
@@ -215,78 +207,7 @@ mpc_gethostbyname(mpc_event_loop_t *el, const uint8_t *name, size_t len,
     ares_gethostbyname(resolver->channel, buf, AF_INET, mpc_resolver_callback,
                        ctx);
 
-    mask = ares_getsock(resolver->channel, socks, ARES_GETSOCK_MAXNUM);
-    if (mask == 0) {
-        goto failed;
-    }
-
-    for (i = 0; i < ARES_GETSOCK_MAXNUM; i++) {
-        anyevent = 0;
-
-        sock = socks[i];
-        node = mpc_rbtree_find(&resolver->rbtree, (int64_t) sock);
-
-        if (ARES_GETSOCK_READABLE(mask, i)) {
-
-            anyevent = 1;
-
-            if (node == NULL) {
-                node = mpc_rbnode_get();
-                if (node == NULL) {
-                    goto failed;
-                }
-                mpc_rbnode_init(node);
-                node->key = (int64_t) sock;
-                node->data = 0;
-            }
-
-            if (!((int64_t )node->data & MPC_READABLE)) {
-                node->data = (void *) (((int64_t) node->data)|MPC_READABLE);
-                mpc_create_file_event(el, socks[i], MPC_READABLE, 
-                                      (mpc_event_file_pt)mpc_resolver_process,
-                                      (void *)resolver);
-                mpc_rbtree_insert(&resolver->rbtree, node);
-            }
-        }
-
-        if (ARES_GETSOCK_WRITABLE(mask, i)) {
-
-            anyevent = 1;
-
-            if (node == NULL) {
-                node = mpc_rbnode_get();
-                if (node == NULL) {
-                    goto failed;
-                }
-                mpc_rbnode_init(node);
-                node->key = (int64_t) sock;
-                node->data = 0;
-            }
-
-            if (!((int64_t) node->data & MPC_WRITABLE)) {
-                node->data = (void *) (((int64_t) node->data)|MPC_WRITABLE);
-                mpc_create_file_event(el, socks[i], MPC_WRITABLE, 
-                                      (mpc_event_file_pt)mpc_resolver_process,
-                                      (void *)resolver);
-                mpc_rbtree_insert(&resolver->rbtree, node);
-            }
-        }
-
-        if (anyevent == 0) {
-            /* assume no further sockets are returned */
-            break;
-        }
-    }
-
     return MPC_OK;
-
-failed:
-
-    mpc_resolver_put(ctx);
-
-    mpc_rbnode_put(node);
-
-    return MPC_ERROR;
 }
 
 
@@ -309,22 +230,64 @@ mpc_resolver_process_sockstate(void *data, ares_socket_t sock,
 {
     mpc_resolver_t  *resolver = (mpc_resolver_t *) data;
     mpc_rbnode_t    *node;
+    int              mask;
+
+    node = mpc_rbtree_find(&resolver->rbtree, (int64_t) sock);
 
     if (read || write) {
-        printf("REGISTER %s\n", __func__);
+        mask = (read ? MPC_READABLE : 0) | (write ? MPC_WRITABLE : 0); 
+
+        if (node == NULL) {
+            /* new socket */
+
+            /* if this is the first socket then create a timer event */
+            if (resolver->timer_id == -1) {
+                resolver->timer_id = mpc_create_time_event(resolver->el, 
+                                                   MPC_RESOLVER_INTERVAL, 
+                                                   mpc_resolver_process_timeout,
+                                                   (void *)resolver, NULL);
+
+                if (resolver->timer_id == MPC_ERROR) {
+                    mpc_log_stderr(0, "create resolver time event failed");
+                    ASSERT(0);
+                }
+            }
+
+            node = mpc_rbnode_get();
+            if (node == NULL) {
+                mpc_log_stderr(0, "get rbtree node failed");
+                ASSERT(0);
+            }
+
+            mpc_rbnode_init(node);
+            node->key = (int64_t) sock;
+            node->data = (void *) 0;
+            mpc_rbtree_insert(&resolver->rbtree, node);
+        }
+
+        node->data = (void *) (int64_t) mask;
+
+        mpc_create_file_event(resolver->el, sock, mask,
+                              (mpc_event_file_pt) mpc_resolver_process,
+                              (void *)resolver);
 
     } else {
         /* read == 0 and write == 0 this is c-ares's way of notifying us
          * that the socket is now closed. We must free the data associated
          * with the socket */
 
-        printf("DELETE %s\n", __func__);
-
         node = mpc_rbtree_find(&resolver->rbtree, (int64_t) sock);
         mpc_delete_file_event(resolver->el, sock, MPC_READABLE|MPC_WRITABLE);
         ASSERT(node);
         mpc_rbtree_delete(&resolver->rbtree, node);
         mpc_rbnode_put(node);
+
+        if (mpc_rbtree_empty(&resolver->rbtree)) {
+            if (resolver->timer_id != -1) {
+                mpc_delete_time_event(resolver->el, resolver->timer_id);
+                resolver->timer_id = -1;
+            }
+        }
     }
 }
 

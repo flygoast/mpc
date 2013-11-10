@@ -1,8 +1,9 @@
-DEBUG = -g 						\
+DEBUG = -g -O0					\
 		-DWITH_DEBUG			\
 		-DWITH_MPC_RESOLVER
 CC = gcc
-CFLAGS = $(DEBUG)  -Wall -Werror -rdynamic
+#CFLAGS = $(DEBUG)  -Wall -Werror -rdynamic
+CFLAGS = $(DEBUG)  -Wall -rdynamic
 INC = -I . -I /usr/local/include
 LIB = -L /home/fenggu/slib -lpthread -lcares -lrt
 OO = mpc.o 				\

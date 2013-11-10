@@ -37,6 +37,7 @@
 #define mpc_rbtree_is_red(node)         ((node)->color)
 #define mpc_rbtree_is_black(node)       (!mpc_rbtree_is_red(node))
 #define mpc_rbtree_copy_color(n1, n2)   ((n1)->color = (n2)->color)
+#define mpc_rbtree_empty(tree)          ((tree)->root == (tree)->sentinel)
 
 
 typedef struct mpc_rbnode_s     mpc_rbnode_t;
