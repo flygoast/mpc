@@ -1,4 +1,32 @@
-## Author
-FengGu, <flygoast@gmail.com> <flygoast@126.com>
+# MPC -- A asynchronous HTTP benchmark tool
 
-![flygoast](http://www.gravatar.com/avatar/7d5438da1e440c203d85e0a24b036c0b?r=g&s=80&d=http%3A%2F%2Fst.pimg.net%2Ftucs%2Fimg%2Fwho.png)
+# Usage
+
+```shell
+
+Usage: mpc [-hvfr] [-l log file] [-L log level] 
+           [-c concurrency] [-u url file] [-m http method]
+           [-R result file] [-M result mark string] 
+           [-a specified address] [-t run time]
+
+Options:
+  -h, --help            : this help
+  -v, --version         : show version and exit
+  -C, --conf=S          : configuration file
+  -u, --url-file        : url file
+  -a, --address=S       : use address specified instead of DNS
+  -f, --follow-location : follow 302 redirect
+  -r, --replay          : replay the url file
+  -l, --log-file=S      : log file
+  -L, --log-level=S     : log level
+  -c, --concurrency=N   : concurrency
+  -m, --http-method=S   : http method GET, HEAD
+  -R, --result-file=S   : show result in a file
+  -M, --result-mark=S   : result file mark string
+  -t, --run-time=Nm     : timed testing where "m" is modifer
+                          S(second), M(minute), H(hour), D(day)
+
+```
+
+## Author
+FengGu, <flygoast@126.com>
