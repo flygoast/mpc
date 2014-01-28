@@ -286,7 +286,7 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
             }
             break;
 
-        case '?':
+        default:
             mpc_log_stderr(0, "invalid option -- '%c'", optopt);
             return MPC_ERROR;
         }
@@ -299,7 +299,7 @@ mpc_get_options(int argc, char **argv, mpc_instance_t *ins)
 static void
 mpc_show_usage(void)
 {
-    printf("Usage: mpc [-?hvfr] [-l log file] [-L log level] " CRLF
+    printf("Usage: mpc [-hvfr] [-l log file] [-L log level] " CRLF
            "           [-c concurrency] [-u url file] [-m http method]" CRLF
            "           [-R result file] [-M result mark string] " CRLF
            "           [-a specified address] [-t run time]" CRLF
