@@ -1,6 +1,6 @@
-# MPC -- A asynchronous HTTP benchmark tool
+## MPC -- A asynchronous HTTP benchmark tool
 
-# Usage
+## Usage
 
 ```shell
 
@@ -29,4 +29,5 @@ Options:
 ```
 
 ## Author
+
 FengGu, <flygoast@126.com>
