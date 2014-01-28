@@ -31,7 +31,7 @@
 #include <mpc_core.h>
 
 
-static mpc_logger_t     mpc_logger;
+static mpc_logger_t  mpc_logger = { NULL, MPC_LOG_INFO, STDOUT_FILENO, 0 };
 
 
 static mpc_str_t err_levels[] = {

@@ -92,7 +92,6 @@ mpc_conn_put(mpc_conn_t *conn)
 void
 mpc_conn_init(uint32_t max_nfree)
 {
-
     mpc_conn_max_nfree = max_nfree;
     mpc_conn_nfree = 0;
     TAILQ_INIT(&mpc_conn_free_queue);

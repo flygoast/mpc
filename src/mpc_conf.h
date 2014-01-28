@@ -177,24 +177,60 @@ typedef struct {
 char *mpc_conf_check_num_bounds(mpc_conf_t *cf, void *post, void *data);
 
 
-#define mpc_conf_init_value(conf, default)               \
-    if (conf == MPC_CONF_UNSET) {                        \
-        conf = default;                                  \
+#define mpc_conf_init_value(conf, default)                                   \
+    if (conf == MPC_CONF_UNSET) {                                            \
+        conf = default;                                                      \
     }
 
-#define mpc_conf_init_ptr_value(conf, default)           \
-    if (conf == MPC_CONF_UNSET_PTR) {                    \
-        conf = default;                                  \
+#define mpc_conf_init_ptr_value(conf, default)                               \
+    if (conf == MPC_CONF_UNSET_PTR) {                                        \
+        conf = default;                                                      \
     }
 
-#define mpc_conf_init_uint_value(conf, default)          \
-    if (conf == MPC_CONF_UNSET_UINT) {                   \
-        conf = default;                                  \
+#define mpc_conf_init_uint_value(conf, default)                              \
+    if (conf == MPC_CONF_UNSET_UINT) {                                       \
+        conf = default;                                                      \
     }
 
-#define mpc_conf_init_size_value(conf, default)          \
-    if (conf == MPC_CONF_UNSET_SIZE) {                   \
-        conf = default;                                  \
+#define mpc_conf_init_size_value(conf, default)                              \
+    if (conf == MPC_CONF_UNSET_SIZE) {                                       \
+        conf = default;                                                      \
+    }
+
+#define mpc_conf_merge_value(conf, prev, default)                            \
+    if (conf == MPC_CONF_UNSET) {                                            \
+        conf = (prev == MPC_CONF_UNSET) ? default : prev;                    \
+    }
+
+#define mpc_conf_merge_ptr_value(conf, prev, default)                        \
+    if (conf == MPC_CONF_UNSET_PTR) {                                        \
+        conf = (prev == MPC_CONF_UNSET_PTR) ? default : prev;                \
+    }
+
+#define mpc_conf_merge_uint_value(conf, prev, default)                       \
+    if (conf == MPC_CONF_UNSET_UINT) {                                       \
+        conf = (prev == MPC_CONF_UNSET_UINT) ? default : prev;               \
+    }
+
+#define mpc_conf_merge_size_value(conf, prev, default)                       \
+    if (conf == MPC_CONF_UNSET_SIZE) {                                       \
+        conf = (prev == MPC_CONF_UNSET_SIZE) ? default : prev;               \
+    }
+
+#define mpc_conf_merge_str_value(conf, prev, default)                        \
+    if (conf.data == NULL) {                                                 \
+        if (prev.data) {                                                     \
+            conf.len = prev.len;                                             \
+            conf.data = prev.data;                                           \
+        } else {                                                             \
+            conf.len = sizeof(default) - 1;                                  \
+            conf.data = (u_char *) default;                                  \
+        }                                                                    \
+    }
+
+#define mpc_conf_merge_bitmask_value(conf, prev, default)                    \
+    if (conf == 0) {                                                         \
+        conf = (prev == 0) ? default : prev;                                 \
     }
 
 
@@ -215,13 +251,18 @@ void mpc_conf_free(mpc_conf_t *cf);
 
 char *mpc_conf_set_flag_slot(mpc_conf_t *cf, mpc_command_t *cmd, void *conf);
 char *mpc_conf_set_str_slot(mpc_conf_t *cf, mpc_command_t *cmd, void *conf);
-char *mpc_conf_set_str_array_slot(mpc_conf_t *cf, mpc_command_t *cmd, void *conf);
-char *mpc_conf_set_str_keyval_slot(mpc_conf_t *cf, mpc_command_t *cmd, void *conf);
+char *mpc_conf_set_str_array_slot(mpc_conf_t *cf, mpc_command_t *cmd,
+    void *conf);
+char *mpc_conf_set_str_keyval_slot(mpc_conf_t *cf, mpc_command_t *cmd,
+    void *conf);
 char *mpc_conf_set_num_slot(mpc_conf_t *cf, mpc_command_t *cmd, void *conf);
-char *mpc_conf_set_str_size_slot(mpc_conf_t *cf, mpc_command_t *cmd, void *conf);
-char *mpc_conf_set_str_msec_slot(mpc_conf_t *cf, mpc_command_t *cmd, void *conf);
+char *mpc_conf_set_str_size_slot(mpc_conf_t *cf, mpc_command_t *cmd,
+    void *conf);
+char *mpc_conf_set_str_msec_slot(mpc_conf_t *cf, mpc_command_t *cmd,
+    void *conf);
 char *mpc_conf_set_str_sec_slot(mpc_conf_t *cf, mpc_command_t *cmd, void *conf);
-char *mpc_conf_set_str_enum_slot(mpc_conf_t *cf, mpc_command_t *cmd, void *conf);
+char *mpc_conf_set_str_enum_slot(mpc_conf_t *cf, mpc_command_t *cmd,
+    void *conf);
 char *mpc_conf_set_str_bitmask_slot(mpc_conf_t *cf, mpc_command_t *cmd,
     void *conf);
 

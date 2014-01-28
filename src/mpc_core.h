@@ -83,15 +83,13 @@ typedef struct mpc_stat_s mpc_stat_t;
 #include <mpc_stat.h>
 
 
-#define MPC_VERSION_NUM         0x00000004           /* aabbbccc */
-#define MPC_VERSION_STR         "0.0.8"
+#define MPC_VERSION_NUM         0x00000009           /* aabbbccc */
+#define MPC_VERSION_STR         "0.0.9"
 #define MPC_VERSION_STATUS      "devel"
 #define MPC_VERSION             "mpc/" MPC_VERSION_STR
 
-#define MPC_DEFAULT_CONF_PATH   "conf/mpc.conf"
-#define MPC_DEFAULT_PORT        17748
 #define MPC_DEFAULT_CONCURRENCY 50
-#define MPC_MAX_CONCURRENCY     200000
+#define MPC_MAX_CONCURRENCY     50000
 #define MPC_MAX_OPENFILES       327680
 
 #define MPC_OK                  0
@@ -137,27 +135,26 @@ typedef int64_t                 mpc_flag_t;
 
 
 struct mpc_instance_s {
-    char                *conf_filename;
-    char                *input_filename;
-    char                *result_filename;
-    char                *result_mark;
-    char                *addr;
-    int                  port;
+    mpc_str_t            conf_file;
+    mpc_str_t            url_file;
+    mpc_str_t            result_file;
+    mpc_str_t            result_mark;
+    mpc_str_t            log_file;
     int                  log_level;
-    char                *log_file;
-    mpc_event_loop_t    *el;
-    int                  self_pipe[2];
-    mpc_array_t         *urls;
     int                  http_method;
-    int                  concurrency;
+    uint64_t             concurrency;
+    uint64_t             run_time;
+    mpc_flag_t           follow_location;
+    mpc_flag_t           replay;
+    mpc_flag_t           use_addr;
+    struct sockaddr_in   addr;
+
+    mpc_event_loop_t    *el;
+    mpc_array_t         *urls;
     mpc_stat_t          *stat;
-    struct sockaddr_in   dst_addr;
     mpc_http_hdr_t       http_hdr;
     uint32_t             http_count;
-    int64_t              run_time;
-    unsigned             follow_location:1;
-    unsigned             replay:1;
-    unsigned             use_dst_addr:1;
+    int                  self_pipe[2];
 };
 
 

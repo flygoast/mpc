@@ -42,11 +42,6 @@ static void mpc_backtrace(int skip_count);
 #endif
 
 static mpc_signal_t signals[] = {
-    { SIGUSR1, "SIGUSR1", 0,                 mpc_signal_handler },
-    { SIGUSR2, "SIGUSR2", 0,                 mpc_signal_handler },
-    { SIGTTIN, "SIGTTIN", 0,                 mpc_signal_handler },
-    { SIGTTOU, "SIGTTOU", 0,                 mpc_signal_handler },
-    { SIGHUP,  "SIGHUP",  0,                 mpc_signal_handler },
     { SIGINT,  "SIGINT",  0,                 mpc_signal_handler },
     { SIGSEGV, "SIGSEGV", (int)SA_RESETHAND, mpc_signal_handler },
     { SIGPIPE, "SIGPIPE", 0,                 SIG_IGN },

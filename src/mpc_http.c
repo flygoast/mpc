@@ -489,7 +489,7 @@ mpc_http_process_request(mpc_instance_t *ins, mpc_url_t *mpc_url,
     return MPC_OK;
 
     /*
-    if (ins->use_dst_addr) {
+    if (ins->use_addr) {
         if (mpc_http_create_request((char *)&ins->dst_addr.sin_addr, mpc_http)
             != MPC_OK)
         {
@@ -554,12 +554,6 @@ mpc_http_gethostbyname_cb(mpc_event_loop_t *el, int status,
                       mpc_url->url_id, &mpc_url->host,
                       addr & 0xff, (addr & 0xff00) >> 8,
                       (addr & 0xff0000) >> 16, (addr & 0xff000000) >> 24);
-
-        printf("%d gethostbyname url(%d) \"%.*s\" %u.%u.%u.%u\n", 
-               count, mpc_url->url_id, mpc_url->host.len, mpc_url->host.data,
-               addr & 0xff, (addr & 0xff00) >> 8,
-               (addr & 0xff0000) >> 16, (addr & 0xff000000) >> 24);
-
 #endif
 
         /*
@@ -569,11 +563,8 @@ mpc_http_gethostbyname_cb(mpc_event_loop_t *el, int status,
         }
         */
     } else {
-        printf("gethostbyname failed: (%d: %s)\n", 
-               status, mpc_resolver_strerror(status));
-
-        mpc_log_err(0, "gethostbyname failed: (%d: %s)", 
-                    status, mpc_resolver_strerror(status));
+        mpc_log_err(0, "gethostbyname(%V) failed: (%d: %s)", 
+                    &mpc_url->host, status, mpc_resolver_strerror(status));
         if (mpc_url->no_put == 0) {
             mpc_url_put(mpc_url);
         }
