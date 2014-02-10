@@ -47,6 +47,7 @@ typedef void (*mpc_gethostbyname_cb)(mpc_event_loop_t *el, int status,
  * add whitespace between two servers.
  */
 int mpc_resolver_init(mpc_event_loop_t *el, const char *server);
+void mpc_resolver_deinit(mpc_event_loop_t *el);
 
 int mpc_gethostbyname(mpc_event_loop_t *el, const uint8_t *name, size_t len,
     mpc_gethostbyname_cb callback, void *arg);

@@ -73,7 +73,6 @@ mpc_resolver_init(mpc_event_loop_t *el, const char *server)
         return MPC_ERROR;
     }
 
-    /* TODO free*/
     resolver = mpc_calloc(1, sizeof(mpc_resolver_t));
     if (resolver == NULL) {
         mpc_log_emerg(0, "allocate memory failed");
@@ -126,9 +125,26 @@ failed:
 }
 
 
-void 
-mpc_resolver_cleanup()
+void
+mpc_resolver_deinit(mpc_event_loop_t *el)
 {
+    mpc_resolver_t  *resolver;
+
+    resolver = (mpc_resolver_t *) el->resolver;
+
+    if (resolver == NULL) {
+        return;
+    }
+
+    if (resolver->timer_id != -1) {
+        mpc_delete_time_event(el, resolver->timer_id);
+    }
+
+    ares_destroy(resolver->channel);
+
+    mpc_free(resolver);
+    el->resolver = NULL;
+
     ares_library_cleanup();
 }
 

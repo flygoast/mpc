@@ -102,9 +102,11 @@ mpc_core_deinit(mpc_instance_t *ins)
     mpc_buf_deinit();
     mpc_conn_deinit();
 
-    if (ins->el) {
-        mpc_free_event_loop(ins->el);
-    }
+#ifdef WITH_MPC_RESOLVER
+    mpc_resolver_deinit(ins->el);
+#endif
+
+    mpc_free_event_loop(ins->el);
 
     if (ins->urls) {
         mpc_array_each(ins->urls, mpc_core_put_url, NULL);
